@@ -916,11 +916,11 @@ class _Chip extends StatelessWidget {
   }
 }
 
-/// A rupee amount typed as digits.
+/// A rupee amount, typed on the platform's numeric keyboard.
 ///
-/// Same rule as the entry keypad: the value is built in paise, so there is no
-/// decimal separator to parse and no rounding step. The field only ever holds
-/// digits, and the label above it shows what they mean.
+/// Rupees with an optional decimal, the way the field's own ₹ implies — this
+/// used to read the digits as paise, so typing 100 showed "₹ 100" and meant
+/// ₹1.00. Parsed once by [parseRupees] and held as an int thereafter.
 class _SignedAmountField extends StatefulWidget {
   const _SignedAmountField({
     required this.value,
@@ -938,7 +938,7 @@ class _SignedAmountField extends StatefulWidget {
 
 class _SignedAmountFieldState extends State<_SignedAmountField> {
   late final _controller =
-      TextEditingController(text: widget.value == 0 ? '' : '${widget.value.abs()}');
+      TextEditingController(text: amountFieldText(widget.value.abs()));
   late bool _negative = widget.value < 0;
 
   @override
@@ -948,8 +948,8 @@ class _SignedAmountFieldState extends State<_SignedAmountField> {
   }
 
   void _emit() {
-    final digits = int.tryParse(_controller.text) ?? 0;
-    widget.onChanged(_negative ? -digits : digits);
+    final minor = parseRupees(_controller.text) ?? 0;
+    widget.onChanged(_negative ? -minor : minor);
   }
 
   @override
@@ -971,14 +971,15 @@ class _SignedAmountFieldState extends State<_SignedAmountField> {
         Expanded(
           child: TextField(
             controller: _controller,
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [amountInputFormatter],
             onChanged: (_) => setState(_emit),
             decoration: InputDecoration(
               hintText: '0',
               prefixText: '$rupee ',
               helperText: rupees(widget.value, signed: true),
-              helperStyle: mono(11,
-                  color: Theme.of(context).colorScheme.secondary),
+              helperStyle:
+                  mono(11, color: Theme.of(context).colorScheme.secondary),
             ),
           ),
         ),

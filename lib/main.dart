@@ -26,7 +26,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   /// Only the parts of the store that decide what the MaterialApp renders.
   ///
   /// Rebuilding the whole app on every store notification would repaint three
-  /// pages of cards on each keypad tap. This rebuilds when the shell actually
+  /// pages of cards on every keystroke. This rebuilds when the shell actually
   /// changes and lets each page listen for itself.
   ///
   /// Assigned in initState rather than declared `late var ... = (...)`. A late

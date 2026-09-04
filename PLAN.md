@@ -235,7 +235,7 @@ last day of shorter months.
 | `grid.dart` | `GridFrame` — week columns, month ruler, weekday gutter | copy verbatim |
 | `icons.dart` | Lucide keys, + a Money group (wallet, receipt, banknote, piggy-bank…) | copy + extend |
 | `home.dart` | Overview: balance, Day/Week/Month segmented, in-vs-out, spend heatmap, recent rows | new |
-| `entry_sheet.dart` | The keypad sheet — add/edit a transaction | new, the most important screen |
+| `entry_sheet.dart` | Add/edit a transaction — the numeric field and the pills | new, the most important screen |
 | `ledger_screen.dart` | Full transaction list, filter by account/category/kind, month jump | new |
 | `analytics.dart` | Pure maths over `List<Txn>`, widget-free | new |
 | `analytics_screen.dart` | Monthly bars, category breakdown, account balances | new |
@@ -352,7 +352,7 @@ state management, any codegen.
 3. `store.dart` + `test/store_test.dart` — models, seeding, persistence, transfers excluded from
    totals, export/import round-trip.
 4. `penny.dart` + `onboarding.dart` + the **empty state** — the screen most people see first.
-5. `entry_sheet.dart` — keypad, kind toggle, category, account, date, note.
+5. `entry_sheet.dart` — amount field, kind toggle, category, account, date, note.
 6. `home.dart` — Day/Week/Month segmented, balance, in-vs-out, heatmap, recent rows.
 7. `ledger_screen.dart` + filters.
 8. `analytics.dart` + `analytics_screen.dart`.
@@ -376,7 +376,7 @@ Test files, named after what they protect (Wick's convention):
 | Test | Asserts |
 |---|---|
 | `palette_test` | every contrast pair above, **per theme** — incl. that `onAccent` resolves to navy, and that `sprout` vs `coin` clear the luminance gap |
-| `money_test` | `rupees(12045000) == '₹1,20,450.00'`; keypad digit-append; no double anywhere |
+| `money_test` | `rupees(12045000) == '₹1,20,450.00'`; `parseRupees` on commas, partial decimals, garbage and overflow; the input formatter; no double anywhere |
 | `store_test` | seeding, add/edit/delete, **transfer excluded from income and expense totals**, balance = opening + ins − outs, export→import round-trip, malformed JSON leaves data intact |
 | `recurring_test` | `dueOccurrences` across month ends, 31st clamping, DST boundary, no double-materialisation on relaunch |
 | `analytics_test` | day/week/month buckets, category totals, week start, empty ranges |
@@ -647,6 +647,22 @@ under no test at all.
   help: `PennyImage` passes `cacheHeight`, which wraps the provider in a
   `ResizeImage` under a different cache key. `runAsync` with a real delay is the
   fix — it is the only place real futures complete under fake async.
+
+### Changed after using it
+
+- **The custom keypad is gone.** Reimplementing a number pad the platform
+  already provides is work the OS does better, and it costs the user their own
+  keyboard's layout, haptics, and accessibility settings. The amount is a
+  `TextField` with `TextInputType.numberWithOptions(decimal: true)`, autofocused
+  so the keyboard is up the moment the sheet opens.
+- **The meaning of a typed amount changed with it.** A keypad can build
+  paise-first (`4 5 0 0 0` = ₹450.00); a field labelled `₹` cannot — typing
+  `450` there has to mean four hundred and fifty. `parseRupees` is the one
+  place a string becomes money, and an input formatter validates the whole
+  candidate so `12.345` is refused outright rather than a digit at a time.
+- **The opening-balance field was reading digits as paise.** It showed
+  `₹ 100` in a field prefixed with a rupee sign and meant ₹1.00. Same parser
+  now, same meaning as everywhere else.
 
 ## Suggested next
 

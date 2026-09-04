@@ -5,8 +5,8 @@ Track today. Build tomorrow.
 A personal money tracker. Income, expenses and transfers across your accounts,
 with the daily, weekly and monthly picture. Everything stays on the phone.
 
-- **Add in two taps.** A keypad, not a form — the amount builds paise-first the
-  way a bank app does.
+- **Add in seconds.** The amount field opens with the numeric keyboard already
+  up; everything else has a sensible default.
 - **Accounts and transfers.** Moving cash from the bank isn't spending, and the
   month's totals know it.
 - **Categories** you can rename, recolour and archive, each with its own icon.
@@ -43,8 +43,8 @@ tool/release.sh                   # split-per-abi release APKs into releases/
 ## Things that are settled
 
 **Money is an integer number of paise, never a double.** `0.1 + 0.2 != 0.3`, and
-a ledger that drifts is worthless. The entry keypad appends digits to an int, so
-no amount is ever parsed from a string.
+a ledger that drifts is worthless. The typed amount is parsed in exactly one
+place — `parseRupees` in `money.dart` — and is an integer everywhere else.
 
 **Transfers are a kind, not a category.** Without them a cash withdrawal reads
 as an expense and overstates the month by exactly the amount withdrawn.

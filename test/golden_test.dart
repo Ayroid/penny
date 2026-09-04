@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:penny/analytics_screen.dart';
 import 'package:penny/clock.dart';
+import 'package:penny/entry_sheet.dart';
 import 'package:penny/home.dart';
 import 'package:penny/ledger_screen.dart';
 import 'package:penny/onboarding.dart';
@@ -209,6 +210,35 @@ void main() {
 
   testWidgets('settings', (tester) async {
     await shot(tester, 'settings', SettingsScreen(store: await seeded()));
+  });
+
+  testWidgets('entry sheet', (tester) async {
+    final store = await seeded();
+    tester.view
+      ..physicalSize = const Size(1080, 2280)
+      ..devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: appTheme(dark: false),
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: TextButton(
+              onPressed: () => showEntrySheet(context, store),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await settleImages(tester);
+
+    await expectLater(
+        find.byType(MaterialApp), matchesGoldenFile('goldens/entry_sheet.png'));
   });
 
   testWidgets('onboarding', (tester) async {

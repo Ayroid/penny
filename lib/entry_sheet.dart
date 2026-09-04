@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'icons.dart';
@@ -46,8 +45,9 @@ class _EntrySheet extends StatefulWidget {
 class _EntrySheetState extends State<_EntrySheet> {
   late TxKind _kind = widget.initialKind;
 
-  /// Paise. The amount only ever exists as an integer — see money.dart.
-  late int _minor = widget.existing?.amountMinor ?? 0;
+  late final _amount = TextEditingController(
+    text: amountFieldText(widget.existing?.amountMinor ?? 0),
+  );
   late DateTime _day = widget.existing != null
       ? parseDay(widget.existing!.day)
       : today();
@@ -57,8 +57,13 @@ class _EntrySheetState extends State<_EntrySheet> {
   late String? _toAccountId = widget.existing?.toAccountId;
   late final _note = TextEditingController(text: widget.existing?.note ?? '');
 
+  /// Paise. The amount is a string only while it is being typed — it is
+  /// parsed exactly once, here, and is an integer everywhere else.
+  int get _minor => parseRupees(_amount.text) ?? 0;
+
   @override
   void dispose() {
+    _amount.dispose();
     _note.dispose();
     super.dispose();
   }
@@ -83,11 +88,6 @@ class _EntrySheetState extends State<_EntrySheet> {
       _category != null &&
       (_kind != TxKind.transfer ||
           (_toAccountId != null && _toAccountId != _accountId));
-
-  void _tap(int digit) {
-    HapticFeedback.selectionClick();
-    setState(() => _minor = appendDigit(_minor, digit));
-  }
 
   void _save() {
     final t = widget.existing;
@@ -135,12 +135,13 @@ class _EntrySheetState extends State<_EntrySheet> {
     final category = _category;
 
     return Padding(
-      // The keypad must clear the software keyboard when the note has focus.
+      // The sheet must ride above the software keyboard, which is up as soon
+      // as it opens — the amount field autofocuses.
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         top: false,
         child: ConstrainedBox(
-          // A sheet with a keypad in it is tall. Without a ceiling it runs off
+          // Without a ceiling the sheet runs off
           // a short screen — a small phone in landscape, or a desktop window —
           // and overflows instead of scrolling.
           constraints: BoxConstraints(
@@ -186,18 +187,51 @@ class _EntrySheetState extends State<_EntrySheet> {
                   ),
                   const SizedBox(height: 24),
 
-                  // The amount, and the only place it is ever shown while being
-                  // typed. Mono, because it is data.
+                  // The amount, typed on the platform's own numeric keyboard.
+                  //
+                  // The rupee sign is a sibling of the field rather than its
+                  // `prefixText`: a prefix sits at the input's left edge while
+                  // a centred value centres in whatever is left of it, so the
+                  // two drift apart across the screen. Sized to its content
+                  // instead, so the pair stays centred together as digits are
+                  // typed.
                   Center(
-                    child: Text(
-                      rupees(_minor),
-                      style: mono(
-                        40,
-                        color: _minor == 0
-                            ? scheme.secondary
-                            : scheme.onSurface,
-                        weight: FontWeight.w700,
-                        spacing: -0.5,
+                    // A maximum amount is 11 mono characters at 40px, which is
+                    // within a hair of the sheet's width on a narrow phone.
+                    // Scaling down beats overflowing.
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(rupee, style: _amountStyle(scheme.secondary)),
+                          const SizedBox(width: 4),
+                          IntrinsicWidth(
+                            child: TextField(
+                              controller: _amount,
+                              autofocus: widget.existing == null,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              inputFormatters: [amountInputFormatter],
+                              onChanged: (_) => setState(() {}),
+                              style: _amountStyle(scheme.onSurface),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                                hintText: '0',
+                                hintStyle: _amountStyle(scheme.secondary),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -263,15 +297,6 @@ class _EntrySheetState extends State<_EntrySheet> {
                   ),
                   const SizedBox(height: 16),
 
-                  _Keypad(
-                    onDigit: _tap,
-                    onBackspace: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _minor = dropDigit(_minor));
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
                   FilledButton(
                     onPressed: _valid ? _save : null,
                     child: Text(widget.existing == null ? 'Add' : 'Save'),
@@ -295,6 +320,11 @@ class _EntrySheetState extends State<_EntrySheet> {
       ),
     );
   }
+
+  /// The headline figure's type. Shared so the sign, the value and the hint
+  /// cannot drift out of step.
+  TextStyle _amountStyle(Color color) =>
+      mono(40, color: color, weight: FontWeight.w700, spacing: -0.5);
 
   String _dayLabel(DateTime d) {
     final t = today();
@@ -455,74 +485,6 @@ class _PickerSheet extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// The number pad. Ten digits, a double zero and a backspace.
-class _Keypad extends StatelessWidget {
-  const _Keypad({required this.onDigit, required this.onBackspace});
-
-  final ValueChanged<int> onDigit;
-  final VoidCallback onBackspace;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget key(String label, VoidCallback onTap, {String? semantics}) =>
-        Expanded(
-          child: Semantics(
-            button: true,
-            label: semantics ?? label,
-            excludeSemantics: true,
-            onTap: onTap,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                height: 52,
-                child: Center(
-                  child: label == '⌫'
-                      ? Icon(
-                          LucideIcons.delete,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        )
-                      : Text(
-                          label,
-                          style: mono(
-                            22,
-                            color: Theme.of(context).colorScheme.onSurface,
-                            weight: FontWeight.w600,
-                            spacing: 0,
-                          ),
-                        ),
-                ),
-              ),
-            ),
-          ),
-        );
-
-    Widget row(List<Widget> children) => Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(children: children),
-    );
-
-    Widget digit(int d) => key('$d', () => onDigit(d));
-
-    return Column(
-      children: [
-        row([digit(1), digit(2), digit(3)]),
-        row([digit(4), digit(5), digit(6)]),
-        row([digit(7), digit(8), digit(9)]),
-        row([
-          key('00', () {
-            onDigit(0);
-            onDigit(0);
-          }, semantics: 'double zero'),
-          digit(0),
-          key('⌫', onBackspace, semantics: 'Backspace'),
-        ]),
-      ],
     );
   }
 }

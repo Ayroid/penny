@@ -50,8 +50,7 @@ void main() {
     expect(find.text('Add a transaction'), findsWidgets);
   });
 
-  testWidgets('the keypad builds an amount paise-first and saves a transaction',
-      (tester) async {
+  testWidgets('typing an amount and saving it', (tester) async {
     phone(tester);
     final store = await emptyStore();
     await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
@@ -60,12 +59,10 @@ void main() {
     await tester.tap(find.byTooltip('Add a transaction').first);
     await tester.pumpAndSettle();
 
-    // 4 5 0 0 0 reads as ₹450.00 — the first digits are paise.
-    for (final d in ['4', '5', '0', '0', '0']) {
-      await tester.tap(find.widgetWithText(InkWell, d).last);
-      await tester.pump();
-    }
-    expect(find.text('₹450.00'), findsOneWidget);
+    // The amount field is the one that autofocuses, and it reads as rupees —
+    // "450" is four hundred and fifty, not four rupees fifty.
+    await tester.enterText(find.byType(TextField).first, '450');
+    await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(FilledButton, 'Add'));
     await tester.pumpAndSettle();
@@ -76,7 +73,7 @@ void main() {
     expect(store.totalBalance, -45000);
   });
 
-  testWidgets('backspace and the cap behave on screen', (tester) async {
+  testWidgets('paise are typed after a decimal point', (tester) async {
     phone(tester);
     final store = await emptyStore();
     await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
@@ -84,26 +81,53 @@ void main() {
     await tester.tap(find.byTooltip('Add a transaction').first);
     await tester.pumpAndSettle();
 
-    for (final d in ['1', '2', '3']) {
-      await tester.tap(find.widgetWithText(InkWell, d).last);
-      await tester.pump();
-    }
-    expect(find.text('₹1.23'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '450.50');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('Backspace'));
-    await tester.pump();
-    expect(find.text('₹0.12'), findsOneWidget);
+    expect(store.txns.single.amountMinor, 45050);
+  });
 
-    // Nothing to save while the amount is zero.
-    await tester.tap(find.bySemanticsLabel('Backspace'));
-    await tester.tap(find.bySemanticsLabel('Backspace'));
-    await tester.pump();
-    // Two of these on screen: the sheet's amount, and the balance on the page
-    // behind it. The assertion that matters is that Add is now dead.
-    expect(find.text('₹0.00'), findsWidgets);
-    final button = tester.widget<FilledButton>(find.byType(FilledButton));
-    expect(button.onPressed, isNull,
-        reason: 'a zero amount is not a transaction');
+  testWidgets('an empty or zero amount cannot be saved', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add a transaction').first);
+    await tester.pumpAndSettle();
+
+    FilledButton add() =>
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Add'));
+
+    expect(add().onPressed, isNull, reason: 'nothing typed yet');
+
+    await tester.enterText(find.byType(TextField).first, '0');
+    await tester.pumpAndSettle();
+    expect(add().onPressed, isNull, reason: 'zero is not a transaction');
+
+    await tester.enterText(find.byType(TextField).first, '5');
+    await tester.pumpAndSettle();
+    expect(add().onPressed, isNotNull);
+  });
+
+  testWidgets('the field refuses a third decimal place', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add a transaction').first);
+    await tester.pumpAndSettle();
+
+    final field = find.byType(TextField).first;
+    await tester.enterText(field, '12.34');
+    await tester.pumpAndSettle();
+    await tester.enterText(field, '12.345');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
+    expect(store.txns.single.amountMinor, 1234);
   });
 
   testWidgets('a transfer needs two different accounts before it can save',
@@ -117,10 +141,8 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('Moved'));
     await tester.pumpAndSettle();
-    for (final d in ['5', '0', '0', '0', '0']) {
-      await tester.tap(find.widgetWithText(InkWell, d).last);
-      await tester.pump();
-    }
+    await tester.enterText(find.byType(TextField).first, '500');
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Add'));
     await tester.pumpAndSettle();
 

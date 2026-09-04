@@ -50,52 +50,104 @@ void main() {
     });
   });
 
-  group('keypad arithmetic', () {
-    test('tapping 1,2,3,4,5,6 builds ₹1,234.56', () {
-      var m = 0;
-      for (final d in [1, 2, 3, 4, 5, 6]) {
-        m = appendDigit(m, d);
-      }
-      expect(m, 123456);
-      expect(rupees(m), '₹1,234.56');
+  group('parsing what was typed', () {
+    test('plain rupees', () {
+      expect(parseRupees('450'), 45000);
+      expect(parseRupees('0'), 0);
+      expect(parseRupees('1'), 100);
     });
 
-    test('the first digits are paise', () {
-      var m = appendDigit(0, 5);
-      expect(rupees(m), '₹0.05');
-      m = appendDigit(m, 0);
-      expect(rupees(m), '₹0.50');
-      m = appendDigit(m, 0);
-      expect(rupees(m), '₹5.00');
+    test('rupees and paise', () {
+      expect(parseRupees('450.50'), 45050);
+      expect(parseRupees('450.5'), 45050);
+      expect(parseRupees('0.05'), 5);
+      expect(parseRupees('1234.56'), 123456);
     });
 
-    test('backspace removes one digit and bottoms out at zero', () {
-      var m = 123456;
-      m = dropDigit(m);
-      expect(m, 12345);
-      for (var i = 0; i < 10; i++) {
-        m = dropDigit(m);
-      }
-      expect(m, 0);
-      expect(dropDigit(0), 0);
+    test('the keyboard\'s grouping commas are accepted', () {
+      // The system numeric keyboard offers a comma key, and people paste
+      // amounts with grouping in them.
+      expect(parseRupees('1,20,450.00'), 12045000);
+      expect(parseRupees('1,234.56'), 123456);
     });
 
-    test('leaning on a key stops at the cap instead of running away', () {
-      var m = 0;
-      for (var i = 0; i < 40; i++) {
-        m = appendDigit(m, 9);
-      }
-      expect(m, maxMinor);
-      expect(rupees(m), '₹9,99,99,999.99');
+    test('a half-typed decimal still reads', () {
+      // Otherwise the Add button flickers off the moment the point is typed.
+      expect(parseRupees('12.'), 1200);
+      expect(parseRupees('.5'), 50);
+      expect(parseRupees('.'), 0);
     });
 
-    test('a leading zero does not grow the amount', () {
-      var m = 0;
-      for (var i = 0; i < 5; i++) {
-        m = appendDigit(m, 0);
+    test('nothing typed is not zero, it is nothing', () {
+      expect(parseRupees(''), isNull);
+      expect(parseRupees('   '), isNull);
+    });
+
+    test('garbage is rejected rather than guessed at', () {
+      expect(parseRupees('abc'), isNull);
+      expect(parseRupees('12.34.56'), isNull);
+      expect(parseRupees('-450'), isNull);
+      expect(parseRupees('1e5'), isNull);
+      expect(parseRupees('₹450'), isNull);
+    });
+
+    test('extra decimal places truncate, never round up', () {
+      // Rounding someone's amount up is worse than ignoring digits the
+      // formatter would not have let them type.
+      expect(parseRupees('1.999'), 199);
+      expect(parseRupees('0.009'), 0);
+    });
+
+    test('an absurd amount clamps instead of overflowing', () {
+      expect(parseRupees('999999999999999'), maxMinor);
+      expect(parseRupees('99999999.99'), maxMinor);
+      expect(parseRupees(''.padRight(30, '9')), maxMinor);
+    });
+
+    test('round-trips through the field text', () {
+      for (final minor in [0, 5, 100, 45050, 12045000, maxMinor]) {
+        final text = amountFieldText(minor);
+        expect(parseRupees(text) ?? 0, minor, reason: 'via "$text"');
       }
-      expect(m, 0);
-      expect(rupees(m), '₹0.00');
+    });
+
+    test('field text drops a pointless .00', () {
+      expect(amountFieldText(45000), '450');
+      expect(amountFieldText(45050), '450.50');
+      expect(amountFieldText(5), '0.05');
+      expect(amountFieldText(0), '');
+    });
+  });
+
+  group('the input formatter', () {
+    String filter(String current, String next) => amountInputFormatter
+        .formatEditUpdate(
+          TextEditingValue(text: current),
+          TextEditingValue(text: next),
+        )
+        .text;
+
+    test('lets a normal amount through', () {
+      expect(filter('', '4'), '4');
+      expect(filter('45', '450'), '450');
+      expect(filter('450', '450.'), '450.');
+      expect(filter('450.', '450.5'), '450.5');
+      expect(filter('450.5', '450.50'), '450.50');
+    });
+
+    test('refuses a third decimal place', () {
+      expect(filter('450.50', '450.500'), '450.50');
+    });
+
+    test('refuses a second decimal point, letters and signs', () {
+      expect(filter('450.5', '450.5.'), '450.5');
+      expect(filter('450', '450a'), '450');
+      expect(filter('450', '-450'), '450');
+    });
+
+    test('refuses a paste that is not an amount', () {
+      expect(filter('', '12.345'), '');
+      expect(filter('', '1,234'), '');
     });
   });
 }
