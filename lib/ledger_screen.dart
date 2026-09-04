@@ -174,7 +174,7 @@ class _LedgerPageState extends State<LedgerPage> {
                             child: Row(
                               children: [
                                 Text(
-                                  _dayHeader(item.header!),
+                                  dayHeader(item.header!),
                                   style: text.labelSmall,
                                 ),
                                 const Spacer(),
@@ -211,11 +211,4 @@ class _LedgerPageState extends State<LedgerPage> {
     );
   }
 
-  String _dayHeader(String key) {
-    final d = parseDay(key);
-    final t = today();
-    if (d == t) return 'TODAY';
-    if (d == shiftDays(t, -1)) return 'YESTERDAY';
-    return longDate(d).toUpperCase();
-  }
 }

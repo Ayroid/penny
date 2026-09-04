@@ -51,6 +51,18 @@ DateTime today() {
   return DateTime(n.year, n.month, n.day);
 }
 
+/// How a day is titled above the rows belonging to it.
+///
+/// Shared by the ledger and the overview's recent list, so the two cannot
+/// drift into calling the same day different things.
+String dayHeader(String key) {
+  final d = parseDay(key);
+  final t = today();
+  if (d == t) return 'TODAY';
+  if (d == shiftDays(t, -1)) return 'YESTERDAY';
+  return longDate(d).toUpperCase();
+}
+
 /// A unique, monotonically increasing id.
 ///
 /// Wick uses a bare microsecond timestamp, which is fine when a person taps

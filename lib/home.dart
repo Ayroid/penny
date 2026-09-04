@@ -61,6 +61,35 @@ class _HomePageState extends State<HomePage> {
     final totals = totalsIn(store.txns, range);
     final rows = within(store.txns, range);
 
+    // The recent list carries the same day headers the ledger does, built up
+    // front rather than inside the children list: a day changes on a row, and
+    // spotting that mid-list is what an index-fiddling loop gets wrong.
+    final recent = <Widget>[];
+    String? lastDay;
+    for (final t in rows.take(8)) {
+      if (t.day != lastDay) {
+        lastDay = t.day;
+        recent.add(
+          Padding(
+            padding: EdgeInsets.only(
+              left: 8,
+              bottom: 4,
+              top: recent.isEmpty ? 0 : 14,
+            ),
+            child: Text(dayHeader(t.day), style: text.labelSmall),
+          ),
+        );
+      }
+      recent.add(
+        TxnRow(
+          store: store,
+          txn: t,
+          hideAmount: store.hideAmounts,
+          onTap: () => showEntrySheet(context, store, existing: t),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -185,19 +214,8 @@ class _HomePageState extends State<HomePage> {
                           size: 120,
                         ),
                       )
-                    else ...[
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8, bottom: 4),
-                        child: Text('RECENT', style: text.labelSmall),
-                      ),
-                      for (final t in rows.take(8))
-                        TxnRow(
-                          store: store,
-                          txn: t,
-                          onTap: () =>
-                              showEntrySheet(context, store, existing: t),
-                        ),
-                    ],
+                    else
+                      ...recent,
                   ],
                 ],
               ),

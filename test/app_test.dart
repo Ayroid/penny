@@ -727,4 +727,32 @@ void main() {
       expect(find.bySemanticsLabel(RegExp('^Day $last\\b')), findsOneWidget);
     });
   });
+
+  testWidgets('recent rows are grouped under day headers', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    final cash = store.accounts.first.id;
+    final food = store.categoriesOf(TxKind.expense).first.id;
+    for (final offset in [0, 0, 1, 2]) {
+      store.addTxn(Txn(
+          kind: TxKind.expense,
+          amountMinor: 45000,
+          day: dayKey(shiftDays(today(), -offset)),
+          categoryId: food,
+          accountId: cash));
+    }
+
+    await tester.pumpWidget(home(store));
+    await tester.pumpAndSettle();
+    await scrollToRows(tester);
+
+    // Same words the ledger uses — the two must not call a day different
+    // things on different screens.
+    expect(find.text('TODAY'), findsOneWidget);
+    expect(find.text('YESTERDAY'), findsOneWidget);
+    expect(find.text(dayHeader(dayKey(shiftDays(today(), -2)))), findsOneWidget);
+
+    // One header for the day with two entries on it, not two.
+    expect(find.byType(TxnRow), findsNWidgets(4));
+  });
 }
