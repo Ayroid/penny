@@ -263,6 +263,10 @@ String longDate(DateTime d) =>
 
 String shortDate(DateTime d) => '${monthShort[d.month - 1]} ${d.day}, ${d.year}';
 
+/// `1 account` / `3 accounts`. [many] for words that do not just take an s.
+String plural(int n, String one, [String? many]) =>
+    '$n ${n == 1 ? one : many ?? '${one}s'}';
+
 String greeting() {
   final h = clock().hour;
   if (h < 12) return 'Good morning';

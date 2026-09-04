@@ -72,17 +72,23 @@ class _Body extends StatelessWidget {
           padding: EdgeInsets.zero,
           child: Column(
             children: [
+              // Counts only. The balance belongs on the overview, where it is
+              // the headline figure — repeating it under a settings row makes
+              // it look like a setting, and puts the number people most want
+              // private on the screen they hand someone else the phone on.
               _Row(
                 icon: LucideIcons.wallet,
                 label: 'Accounts',
-                subtitle:
-                    '${store.liveAccounts.length} · ${rupees(store.totalBalance)}',
+                subtitle: plural(store.liveAccounts.length, 'account'),
                 onTap: () => _showAccounts(context, store),
               ),
               _Row(
                 icon: LucideIcons.tag,
                 label: 'Categories',
-                subtitle: '${store.categories.where((c) => !c.archived).length}',
+                subtitle: plural(
+                    store.categories.where((c) => !c.archived).length,
+                    'category',
+                    'categories'),
                 onTap: () => _showCategories(context, store),
               ),
               _Row(
@@ -90,7 +96,7 @@ class _Body extends StatelessWidget {
                 label: 'Recurring',
                 subtitle: store.rules.isEmpty
                     ? 'Rent, salary, subscriptions'
-                    : '${store.rules.length} ${store.rules.length == 1 ? 'rule' : 'rules'}',
+                    : plural(store.rules.length, 'rule'),
                 onTap: () => _showRules(context, store),
                 last: true,
               ),

@@ -4,6 +4,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+base {
+    // APK filenames: penny-arm64-v8a-release.apk instead of app-arm64-v8a-...
+    archivesName.set("penny")
+}
+
 android {
     namespace = "com.ayroid.penny"
     compileSdk = flutter.compileSdkVersion
