@@ -68,7 +68,10 @@ class _HomePageState extends State<HomePage> {
           children: [
             PageBar(
               title: greeting(),
-              subtitle: 'Your money, on your phone',
+              // The date, the way Wick's Today page carries it. `today()`
+              // rather than `DateTime.now()` so it moves with the injected
+              // clock and the goldens stay still.
+              subtitle: longDate(today()),
               actions: [
                 RoundIconButton(
                   icon: LucideIcons.settings,

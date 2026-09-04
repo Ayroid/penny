@@ -85,7 +85,7 @@ void main() {
   //
   // What is worth pinning here is that the widget actually uses the colours
   // palette_test blessed, so the two files cannot drift apart.
-  testWidgets('the selected pill uses the measured accent and ink',
+  testWidgets('the selected pill uses the measured ink, and travels',
       (tester) async {
     final store = await seeded();
     for (final dark in [false, true]) {
@@ -93,15 +93,36 @@ void main() {
           wrap(HomePage(store: store, onSettings: () {}), dark: dark));
       await tester.pumpAndSettle();
 
-      final label = tester.widget<Text>(find.descendant(
-          of: find.byType(Segmented<Period>), matching: find.text('Month')));
-      expect(label.style?.color, navy,
-          reason: 'white on the sprout measures 2.57 and must never appear');
+      final segmented = find.byType(Segmented<Period>);
 
-      final pill = tester.widget<AnimatedContainer>(find.ancestor(
-          of: find.text('Month'), matching: find.byType(AnimatedContainer)));
-      expect((pill.decoration as BoxDecoration).color,
-          dark ? sproutDark : sprout);
+      TextStyle labelStyle(String label) => tester
+          .widget<AnimatedDefaultTextStyle>(find.ancestor(
+            of: find.text(label),
+            matching: find.descendant(
+                of: segmented, matching: find.byType(AnimatedDefaultTextStyle)),
+          ))
+          .style;
+
+      expect(labelStyle('Month').color, navy,
+          reason: 'white on the sprout measures 2.57 and must never appear');
+      expect(labelStyle('Month').fontWeight, FontWeight.w700,
+          reason: 'weight carries the selection when colour cannot');
+
+      // The pill sits over the selected segment rather than each segment
+      // fading its own background: three of three, so hard right.
+      Alignment pillAt() => tester
+          .widget<AnimatedAlign>(
+              find.descendant(of: segmented, matching: find.byType(AnimatedAlign)))
+          .alignment as Alignment;
+      expect(pillAt(), const Alignment(1, 0));
+
+      await tester.tap(find.text('Day'));
+      await tester.pumpAndSettle();
+      expect(pillAt(), const Alignment(-1, 0),
+          reason: 'the pill travels to the new selection');
+
+      await tester.tap(find.text('Month'));
+      await tester.pumpAndSettle();
     }
   });
 

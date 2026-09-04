@@ -635,6 +635,10 @@ class Segmented<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final keys = options.keys.toList();
+    final index = keys.indexOf(value);
+    final accent = sproutOf(context);
+    final ink = onAccent(context);
 
     return Container(
       padding: const EdgeInsets.all(4),
@@ -642,45 +646,80 @@ class Segmented<T> extends StatelessWidget {
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(pill),
       ),
-      child: Row(
-        children: options.entries.map((e) {
-          final selected = value == e.key;
-          return Expanded(
-            child: Semantics(
-              button: true,
-              selected: selected,
-              label: e.value,
-              excludeSemantics: true,
-              onTap: () => onChanged(e.key),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(e.key),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  // 15 rather than 10: a 13px label plus 20 of padding is a
-                  // 39px target, under the 48 floor. The track ends up 57
-                  // tall rather than the spec's 52, and the a11y rule wins —
-                  // the design system says so itself.
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  decoration: BoxDecoration(
-                    color: selected ? sproutOf(context) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(pill),
-                  ),
-                  child: Text(
-                    e.value,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      // Navy on the sprout, computed. White fails here.
-                      color: selected ? onAccent(context) : scheme.secondary,
+      child: Stack(
+        children: [
+          // The pill slides between positions rather than each segment fading
+          // its own background in and out — the same movement the tab bar
+          // makes, and the same 250ms easeOut it animates a page change with.
+          // A pill that fades in place reads as two things blinking; one that
+          // travels reads as the selection moving, which is what happened.
+          if (index >= 0)
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                alignment: keys.length == 1
+                    ? Alignment.center
+                    : Alignment(-1 + 2 * index / (keys.length - 1), 0),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / keys.length,
+                  heightFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(pill),
                     ),
                   ),
                 ),
               ),
             ),
-          );
-        }).toList(),
+          Row(
+            children: [
+              for (final key in keys)
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: key == value,
+                    label: options[key]!,
+                    excludeSemantics: true,
+                    onTap: () => onChanged(key),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onChanged(key),
+                      child: ConstrainedBox(
+                        // A floor rather than tuned padding: the label's
+                        // height depends on the font, and 48 is the one
+                        // number the design system calls non-negotiable.
+                        // minHeight, so it still grows if the person
+                        // scales their text up.
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOut,
+                            style: TextStyle(
+                              fontFamily: fontFamily,
+                              fontSize: 13,
+                              // Weight as well as colour, so the selection is
+                              // legible without relying on colour alone.
+                              fontWeight: key == value
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                              color: key == value ? ink : scheme.secondary,
+                            ),
+                            child: Text(
+                              options[key]!,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
