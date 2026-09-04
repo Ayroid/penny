@@ -1,0 +1,49 @@
+name: penny
+description: "Track today. Build tomorrow."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The entire persistence layer: one JSON blob plus a handful of scalars.
+  shared_preferences: ^2.5.5
+  # Export a backup; import it again.
+  share_plus: ^13.3.0
+  file_picker: ^12.1.2
+  # The icon set. ~250 named icons out of the package's 28k.
+  lucide_icons_flutter: ^3.1.17
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/mascot/
+    - assets/splash/
+  # assets/icon/ is deliberately not bundled — flutter_launcher_icons reads it
+  # at build time and the app never loads it at runtime.
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf
+
+# The icon is the mascot CROPPED, on the app's ground colour, never transparent.
+# Android adaptive only guarantees the centre 2/3 of the foreground survives the
+# launcher mask; iOS shows the whole square. The same crop framed for one is
+# visibly wrong on the other, so the two point at different files.
+flutter_launcher_icons:
+  image_path: assets/icon/app_icon.png
+  android: true
+  adaptive_icon_background: "#FFF8F1"
+  adaptive_icon_foreground: assets/icon/app_icon_adaptive.png
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#FFF8F1"

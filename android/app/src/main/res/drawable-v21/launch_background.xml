@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-Android-12 splash: the mark on the app's ground, matching what
+     LaunchFrame draws a moment later so the two are indistinguishable. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_background" />
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/penny_mark" />
+    </item>
+</layer-list>
