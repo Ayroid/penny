@@ -196,7 +196,7 @@ expense and both the bank balance and the month's spend are wrong. `transfer` is
 every income/expense total and only moves balance between accounts — this is the single most
 common correctness bug in home-grown money apps.
 
-Defaults seeded on first run: accounts *Cash · Bank · Card*; expense categories *Food & Drink,
+Defaults seeded on first run: accounts *Cash · Bank · Wallet*; expense categories *Food & Drink,
 Groceries, Transport, Rent, Bills, Shopping, Health, Entertainment, Education, Family, Travel,
 Other*; income categories *Salary, Freelance, Interest, Gifts, Refunds, Other*.
 

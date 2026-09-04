@@ -108,14 +108,14 @@ class _TrendCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('IN AND OUT',
+              Text('CREDIT AND DEBIT',
                   style: Theme.of(context).textTheme.labelSmall),
               const Spacer(),
               // A key, because green and orange are the classic confusion
               // pair — the words carry the meaning, the fills only echo it.
-              _Key(colour: sproutOf(context), label: 'in'),
+              _Key(colour: sproutOf(context), label: 'credit'),
               const SizedBox(width: 10),
-              _Key(colour: coinOf(context), label: 'out'),
+              _Key(colour: coinOf(context), label: 'debit'),
             ],
           ),
           const SizedBox(height: 14),
@@ -128,7 +128,7 @@ class _TrendCard extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       label:
-                          '${b.label}: in ${rupees(b.income)}, out ${rupees(b.expense)}',
+                          '${b.label}: credit ${rupees(b.income)}, debit ${rupees(b.expense)}',
                       excludeSemantics: true,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,

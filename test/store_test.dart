@@ -73,7 +73,7 @@ void main() {
   group('seeding', () {
     test('a new ledger arrives usable', () async {
       final s = await seeded();
-      expect(s.accounts.map((a) => a.name), ['Cash', 'Bank', 'Card']);
+      expect(s.accounts.map((a) => a.name), ['Cash', 'Bank', 'Wallet']);
       expect(s.categoriesOf(TxKind.expense), isNotEmpty);
       expect(s.categoriesOf(TxKind.income), isNotEmpty);
       expect(s.totalBalance, 0);
@@ -119,7 +119,7 @@ void main() {
 
     test('an account can open in the red', () async {
       final s = await seeded();
-      final card = s.accountById(acc(s, 'Card'))!;
+      final card = s.accountById(acc(s, 'Wallet'))!;
       card.openingBalanceMinor = -250000;
       s.touch();
       expect(s.balanceOf(card.id), -250000);
