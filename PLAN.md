@@ -1,8 +1,13 @@
 # Penny — personal money + investment tracker
 
-> The plan, kept in the repo. Amendments made while building are recorded in
-> **Changes during the build** at the bottom — the sections above are the plan
-> as approved, so the two can be compared.
+> The plan, kept in the repo, and a record of where it was wrong.
+>
+> The sections down to **Verification** are the plan as approved. Everything
+> after **Changes during the build** is what actually happened, so the two can
+> be read against each other. Where a shipped file differs from a planned one
+> the table marks it ▲.
+>
+> Last updated after v1 shipped: 205 tests, 11 goldens, 17 commits.
 
 ## Context
 
@@ -191,6 +196,21 @@ class Rule     { String id; Txn template; String freq;   // daily|weekly|monthly
                  int interval; String startDay; String? endDay, lastRunDay; }
 ```
 
+```dart
+▲ class Shortcut {                 // added after v1
+  String id;
+  TxKind kind;
+  int    amountMinor;
+  String categoryId, accountId;
+  String? toAccountId;
+  String note;
+}
+```
+
+A shortcut is curated, never inferred, and is its own persisted model rather than a flag on a
+transaction — a transaction is a record of something that happened, and pinning is a statement
+about the future.
+
 **Transfers must exist in v1.** Without them, withdrawing cash from the bank looks like an
 expense and both the bank balance and the month's spend are wrong. `transfer` is excluded from
 every income/expense total and only moves balance between accounts — this is the single most
@@ -224,26 +244,34 @@ last day of shorter months.
 
 ## Files — flat `lib/`, one file per screen or sheet
 
-| File | What it holds | Source |
-|---|---|---|
-| `store.dart` | models + `PennyStore` + persistence + export/import | new, patterned on Wick |
-| `theme.dart` | palette, `appTheme`, `TintCard`/`SoftCard`/`Segmented`/`TintChip`/`RoundIconButton`, `CategoryAccent` | **copy Wick, swap constants + the four white→ink fixes** |
-| `money.dart` | `rupees()`, paise parsing, `signedRupees()` | new, ~40 lines |
-| `penny.dart` | `enum Penny` poses, `PennyImage`, `PennyMessage`, `showPennyMoment` | copy `wick.dart`, drop `FlameMark` |
-| `main.dart` | `App`, splash gate, `RootScreen` PageView, recurring sync | copy Wick |
-| `page_bar.dart` | `PageBar` + floating `PageTabs` | copy verbatim |
-| `grid.dart` | `GridFrame` — week columns, month ruler, weekday gutter | copy verbatim |
-| `icons.dart` | Lucide keys, + a Money group (wallet, receipt, banknote, piggy-bank…) | copy + extend |
-| `home.dart` | Overview: balance, Day/Week/Month segmented, in-vs-out, spend heatmap, recent rows | new |
-| `entry_sheet.dart` | Add/edit a transaction — the numeric field and the pills | new, the most important screen |
-| `ledger_screen.dart` | Full transaction list, filter by account/category/kind, month jump | new |
-| `analytics.dart` | Pure maths over `List<Txn>`, widget-free | new |
-| `analytics_screen.dart` | Monthly bars, category breakdown, account balances | new |
-| `categories.dart` | Category CRUD sheet | new |
-| `accounts.dart` | Account CRUD sheet + per-account balance | new |
-| `recurring.dart` | `Rule`, `dueOccurrences`, the rules screen | new |
-| `settings.dart` | theme, categories, accounts, recurring, export/import, archived | copy Wick's shell |
-| `onboarding.dart` | three pages: what Penny is, seed accounts, add first entry | copy Wick's shape |
+17 files, 6,156 lines. Marked ▲ where what shipped differs from what was planned.
+
+| File | Lines | What it holds |
+|---|---:|---|
+| `settings.dart` | 1071 | ▲ theme, export/import, **and** accounts, categories and rules as sheets — three planned files folded into one, because each is a short list with a small editor |
+| `store.dart` | 909 | models + `PennyStore` + persistence + export/import + ▲ `Shortcut` and `dayHeader` |
+| `theme.dart` | 781 | palette, `appTheme`, `TintCard`/`SoftCard`/`Segmented`/`TintChip`/`RoundIconButton`, `CategoryAccent`, `monoStrut` |
+| `home.dart` | 690 | Overview: balance, pinned strip, period picker, the credit/debit meter, spend grid, recent rows |
+| `entry_sheet.dart` | 584 | Add/edit a transaction — the amount field and the pills |
+| `analytics_screen.dart` | 382 | trend bars, category breakdown |
+| `penny.dart` | 307 | `enum Penny` poses, `PennyImage`, `PennyMessage`, `showPennyMoment`, ▲ `CoinMark` |
+| `ledger_screen.dart` | 214 | full list, search, filter, day headers, running balance |
+| `page_bar.dart` | 193 | `PageBar` + floating `PageTabs` |
+| `analytics.dart` | 174 | pure maths over `List<Txn>`, widget-free |
+| `main.dart` | 173 | `App`, splash gate, `RootScreen` PageView, recurring catch-up |
+| `txn_row.dart` | 149 | ▲ the shared transaction row — not planned, but the overview and the ledger draw the same thing |
+| `icons.dart` | 148 | Lucide keys by group |
+| `money.dart` | 137 | `rupees`, `parseRupees`, the input formatter, `maskedAmount` |
+| `onboarding.dart` | 131 | three pages |
+| `recurring.dart` | 95 | `dueOccurrences`, `materialiseDue` |
+| `clock.dart` | 18 | ▲ `DateTime.now` indirected once, so dates are testable |
+
+**Planned and not built:** `grid.dart` — Wick's `GridFrame` was to be copied verbatim, but a
+month of day cells is a `GridView` with a `crossAxisCount` of 7. Porting 414 lines of a more
+general widget to draw a simpler thing would have been the expensive way round.
+
+**`categories.dart` / `accounts.dart`** were folded into `settings.dart` rather than shipped as
+their own screens.
 
 Cross-cutting rule inherited from Wick: **maths lives in `analytics.dart`, out of the screen
 that draws it**, so it is tested by calling it rather than by pumping a widget.
@@ -353,7 +381,7 @@ state management, any codegen.
    totals, export/import round-trip.
 4. `penny.dart` + `onboarding.dart` + the **empty state** — the screen most people see first.
 5. `entry_sheet.dart` — amount field, kind toggle, category, account, date, note.
-6. `home.dart` — Day/Week/Month segmented, balance, in-vs-out, heatmap, recent rows.
+6. `home.dart` — Day/Week/Month segmented, balance, credit/debit meter, spend grid, recent rows.
 7. `ledger_screen.dart` + filters.
 8. `analytics.dart` + `analytics_screen.dart`.
 9. `categories.dart`, `accounts.dart`, `recurring.dart`, `settings.dart`.
@@ -377,6 +405,7 @@ Test files, named after what they protect (Wick's convention):
 |---|---|
 | `palette_test` | every contrast pair above, **per theme** — incl. that `onAccent` resolves to navy, and that `sprout` vs `coin` clear the luminance gap |
 | `money_test` | `rupees(12045000) == '₹1,20,450.00'`; `parseRupees` on commas, partial decimals, garbage and overflow; the input formatter; no double anywhere |
+| `app_test` | ▲ the whole app end to end — typing an amount, transfers needing two accounts, pinning and unpinning, hiding amounts without the layout moving, delete's confirmation, the week grid, day headers |
 | `store_test` | seeding, add/edit/delete, **transfer excluded from income and expense totals**, balance = opening + ins − outs, export→import round-trip, malformed JSON leaves data intact |
 | `recurring_test` | `dueOccurrences` across month ends, 31st clamping, DST boundary, no double-materialisation on relaunch |
 | `analytics_test` | day/week/month buckets, category totals, week start, empty ranges |
@@ -465,8 +494,9 @@ if it's recorded now:
 ### Suggested order after v1
 
 ```
-v1.1  quick-add · search · running balance · CSV export · duplicate
-v1.2  calendar month view · month-over-month · day/week section headers
+v1.1  ~~quick-add~~ ~~search~~ ~~running balance~~ ~~day headers~~ shipped
+      CSV export · duplicate
+v1.2  calendar month view · month-over-month
 v1.3  budgets (dim, never red) · savings goals · bill reminders
 v1.4  home-screen widget · app lock
 v2.0  holdings · net worth · XIRR · AMFI NAV import · asset allocation
@@ -555,120 +585,143 @@ thing to correct**, not the code.
 
 ## Build status
 
-v1 is complete and runs. `flutter analyze` is clean; `flutter test` is 158 tests.
+**v1 shipped.** `flutter analyze` clean, **205 tests** across 8 files, 11 goldens, 17 commits.
+Private repo at `github.com/Ayroid/penny`.
 
 | Step | State |
 |---|---|
 | 0. Penny's row in `design-system.html` | done |
 | 1. `pubspec` · `theme.dart` · `palette_test` | done — 61 tests |
-| 2. `money.dart` · `money_test` | done — 11 tests |
-| 3. `store.dart` · `store_test` | done — 25 tests |
-| 4. `penny.dart` · `onboarding.dart` · empty state | done |
+| 2. `money.dart` · `money_test` | done — 21 tests |
+| 3. `store.dart` · `store_test` | done — 36 tests |
+| — `recurring.dart` · `analytics.dart` | done — 37 tests, written before any UI |
+| 4. `penny.dart` · onboarding · empty state | done |
 | 5. `entry_sheet.dart` | done |
 | 6. `home.dart` | done |
-| 7. `ledger_screen.dart` + search and filters | done |
-| 8. `analytics.dart` · `analytics_screen.dart` | done — 20 tests |
+| 7. `ledger_screen.dart` | done |
+| 8. `analytics_screen.dart` | done |
 | 9. categories · accounts · recurring · settings | done — folded into `settings.dart` |
-| 10. goldens · `a11y_test` · release script | done — 9 goldens, 6 a11y tests |
+| 10. goldens · `a11y_test` · release script · art pipeline | done |
 
-The two pure-logic files (`recurring.dart`, `analytics.dart`) were written
-before any UI rather than at steps 8-9, so the whole tested core landed before
-the first widget.
+---
 
-**The art has landed.** Six poses, the launcher crop, and the character sheet.
-`tool/make_icon.py` now regenerates everything derived from it — run it after
-changing any source art.
+## What changed after v1, and why
 
-Sources live in `art/` and are never bundled; `assets/` holds only generated
-copies. The six poses went from ~900 KB each to 27 KB (512px, `FASTOCTREE`
-quantised, alpha preserved) — **5.29 MB off the APK**.
+Everything below was found by using the app or by writing a test, not by planning. The pattern
+worth noticing: **six of these were caught by a test written for something else.**
 
-The filenames on the character sheet are the sheet's own (`penny_track`,
-`penny_save`, `penny_invest`, `penny_plan`), not the family's pose names. The
-`Penny` enum's `asset` field reconciles the two in one place rather than
-renaming the artist's files — `Penny.rest` is the pose the sheet calls "Save".
+### Input
 
-`CoinMark` stays: it is still the fallback for a missing pose, and it is what
-the splash and launch frame draw, because those have to scale and recolour in
-a way a raster cannot.
+- **The custom keypad is gone.** Reimplementing a number pad the OS already provides costs the
+  person their own keyboard's layout, haptics and accessibility settings. The amount is a
+  `TextField` with a decimal numeric keyboard, autofocused.
+- **The meaning of a typed amount changed with it.** A keypad can build paise-first (`4·5·0·0·0`
+  = ₹450.00); a field prefixed with `₹` cannot — `450` there is four hundred and fifty.
+  `parseRupees` is the one place a string becomes money. Length is checked *before* parsing,
+  because `int.tryParse` gives up past 19 digits and would make a long paste read as garbage
+  rather than as "too big".
+- **The opening-balance field had the same bug the other way**: it read its digits as paise, so
+  `100` showed `₹ 100` and meant ₹1.00.
+- **Delete is Save's shape, and asks first.** It was a bare text button under a full-width Save.
+  There is no undo anywhere, so a mis-tap was permanent; the confirmation carries the amount,
+  category and note, because "delete this?" is easy to say yes to on the wrong row.
 
-### Found while building, beyond the three palette corrections
+### The overview
 
-- **The empty overview buried its own call to action.** Balance, period picker,
-  an all-zero flow card and an unlit heatmap pushed "Add a transaction" below
-  the fold on the screen most people see first. A brand-new ledger now skips
-  straight from the balance to the empty state.
-- **The ledger filter had four segments.** The design system says more than
-  three is a list, not a segmented control. Cut to All / Out / In; transfers
-  live under All.
-- **Tap targets were 39-40px.** `RoundIconButton` and `Segmented` now hold a
-  48px floor with the visual unchanged — the one rule the contract calls
-  non-negotiable. The segmented track ends up 57 tall rather than the spec's 52;
-  the a11y rule wins.
-- **Every account chip drew a wallet.** It draws its own icon now.
-- **Goldens needed a pinned clock.** Every screen renders a date or a greeting,
-  so images taken today failed tomorrow. `lib/clock.dart` indirects
-  `DateTime.now` once; production never touches it.
-- **`textContrastGuideline` misreads a segmented pill.** It samples the accent
-  fill against its lighter track (2.19) instead of the navy glyph on the pill
-  (5.43). `palette_test` measures the real pairs analytically, which is the
-  stronger check; `a11y_test` pins the widget to those same colours so the two
-  cannot drift.
-- **An imported backup was decoded byte-per-character.** `utf8.decode` now —
-  every backup contains a rupee sign, and most contain notes that are not ASCII.
+- **Pinned shortcuts, not guessed ones.** The strip first inferred chips from recent history.
+  Two entries differing only by account render as identical chips, so it filled with apparent
+  duplicates, and something entered twice by accident outranked the thing worth a shortcut.
+  Pinning is explicit now.
+- **The flow card is a meter row**, a third of its old height. Three bars measuring a period
+  against itself is a comparison nobody needs — comparing periods is the trend chart's job.
+- **Credit and debit** replace in and out, the way a bank statement reads. The entry sheet keeps
+  "Spent / Earned / Moved", which describes what you did rather than which column it lands in.
+- **An eye masks every amount on the overview**, persisted. Masking the headline while `NET` sits
+  two inches below hides nothing. The mask is a fixed six dots — one per digit would give away
+  the order of magnitude.
+- **The spend grid covers the week too.** It was always a calendar of days shaded by spend, just
+  hard-coded to a month's shape.
+- **Recent rows carry the ledger's day headers**, via the same function so the two screens
+  cannot call a day different things.
 
-### Found after the art landed
+### Found while building v1
 
-Three of these are bugs nothing caught until the app was run and an `App`-level
-test was written. Every screen test pumped a page directly with a store already
-loaded, so the shell itself — `App`, `RootScreen`, `PageTabs` — was the one part
-under no test at all.
+- **The empty overview buried its own call to action** behind an all-zero flow card and an unlit
+  heatmap — on the screen most people see first.
+- **The ledger filter had four segments.** The design system says more than three is a list.
+- **Tap targets were 39-40px.** `RoundIconButton` and `Segmented` hold a 48 floor now, with the
+  visual unchanged. The segmented track ends up 57 tall against the spec's 52; the a11y rule wins.
+- **An imported backup was decoded byte-per-character.** `utf8.decode` now — every backup carries
+  a rupee sign, and most carry notes that are not ASCII.
+- **`textContrastGuideline` misreads a segmented pill**, sampling the accent fill against its
+  lighter track (2.19) instead of the navy glyph on it (5.43). `palette_test` measures the real
+  pairs analytically; `a11y_test` pins the widget to those same values so the two cannot drift.
+- **Ids are monotonic, not bare timestamps** — recurring rows are materialised in a tight loop
+  where two calls land in the same microsecond.
+- **Monthly recurrence counts from the start day**, never from the last run: computing March from
+  a February clamped to the 28th would pin the rule to the 28th forever.
+- **`_repair()` adopts orphaned rows rather than dropping them** — losing a row loses money. A
+  transfer with a dangling destination degrades to an expense, because left alone it would move
+  money out of the ledger entirely. **Shortcuts are the exception**: a dangling one is dropped,
+  since adopting it would spend from the wrong account on a single tap.
 
-- **The app never left its splash.** `late var _shell = (...)` has a *lazy*
-  initialiser: it runs on first read, which is inside `_onStoreChanged`, i.e.
-  after loading had already finished. It captured the post-load values, found
-  them equal to themselves, and never called `setState`. Assigned eagerly in
-  `initState` now, and pinned by a test that pumps `App`.
-- **The tab pill had no `Material` ancestor.** `RootScreen` is a bare `Stack` —
-  the pages inside bring their own `Scaffold`s, but the floating pill does not,
-  and every tab is an `InkWell`. It asserted on first build and the row then
-  laid out at a nonsense width.
-- **`PageController.page` is NaN before first layout** (it is
-  `pixels / viewportDimension`, and both are zero). That NaN flowed into the tab
-  weights, and **Dart's `clamp` returns NaN rather than clamping it**, so the
-  padding and `widthFactor` became NaN. Guarded at the source and again in
-  `PageTabs`, which does not trust a listenable handed to it.
-- **The entry sheet opened itself on launch.** A daily prompt until you added
-  something, which is a nag — and the empty state already leads with the same
-  button. Removed.
-- **The entry sheet had no height ceiling**, so on a short screen it overflowed
-  instead of scrolling. Capped at 92% like every other sheet.
-- **Goldens rendered the mascot as empty space.** Precaching by hand did not
-  help: `PennyImage` passes `cacheHeight`, which wraps the provider in a
-  `ResizeImage` under a different cache key. `runAsync` with a real delay is the
-  fix — it is the only place real futures complete under fake async.
+### Bugs the tests found
 
-### Changed after using it
+- **The app never left its splash.** `late var _shell = (...)` has a *lazy* initialiser: it ran
+  on first read, inside `_onStoreChanged`, i.e. after loading had finished — captured the
+  post-load values, found them equal to themselves, and never called `setState`. Nothing had
+  tested `App` itself; every other test pumped a page with a store already loaded.
+- **The tab pill had no `Material` ancestor** and asserted on first build.
+- **`PageController.page` is NaN before first layout** (`pixels / viewportDimension`, both zero),
+  and **Dart's `clamp` returns NaN rather than clamping it** — so the tab padding and
+  `widthFactor` went NaN and the row tried to lay out 299,210px wide.
+- **The screen jumped when hiding amounts.** `•` is not in the platform mono, so a fallback font
+  drew it with its own ascent and descent. `forceStrutHeight` pins the line to the font size
+  whatever glyphs land in it; `₹` has the same exposure.
+- **Two overflows** — the heatmap header at five figures, and a pill label with no bound.
+- **Goldens rendered the mascot as empty space.** Precaching by hand did not help: `PennyImage`
+  passes `cacheHeight`, which wraps the provider in a `ResizeImage` under a different cache key.
+- **Goldens needed a pinned clock.** Every screen renders a date or a greeting, so images taken
+  today failed tomorrow. `lib/clock.dart` indirects `DateTime.now` once. **The same bug had
+  already broken 21 of Wick's goldens**, where the failures read as noise rather than signal.
 
-- **The custom keypad is gone.** Reimplementing a number pad the platform
-  already provides is work the OS does better, and it costs the user their own
-  keyboard's layout, haptics, and accessibility settings. The amount is a
-  `TextField` with `TextInputType.numberWithOptions(decimal: true)`, autofocused
-  so the keyboard is up the moment the sheet opens.
-- **The meaning of a typed amount changed with it.** A keypad can build
-  paise-first (`4 5 0 0 0` = ₹450.00); a field labelled `₹` cannot — typing
-  `450` there has to mean four hundred and fifty. `parseRupees` is the one
-  place a string becomes money, and an input formatter validates the whole
-  candidate so `12.345` is refused outright rather than a digit at a time.
-- **The opening-balance field was reading digits as paise.** It showed
-  `₹ 100` in a field prefixed with a rupee sign and meant ₹1.00. Same parser
-  now, same meaning as everywhere else.
+### The art pipeline
+
+`tool/make_icon.py` regenerates everything derived from `art/`. Sources are never bundled; the
+six poses go from ~900 KB each to 27 KB — **5.29 MB off the APK**.
+
+- **One file cannot serve both platforms.** Android guarantees only the centre 2/3 of an adaptive
+  foreground survives the mask; iOS shows the whole square. Penny's `adaptive_icon_foreground`
+  and `image_path` point at different files. *Wick had them pointing at the same one*, so it was
+  shipping the iOS framing on Android.
+- **`Image.getbbox()` trims on `alpha > 0`**, and the art carries near-invisible noise at the
+  canvas edge — 88px of phantom on Wick's candle. It centred a box that was not there. Trimming
+  is thresholded at `alpha > 8`.
+- The adaptive foreground is oversized **1.21×** past the guaranteed box, deliberately: framing
+  to the guarantee reads small against every other icon on the phone, and a mask tight enough to
+  clip it would be clipping the corners off everything else too.
+
+---
+
+## Ceilings still accepted
+
+- `ponytail:` single JSON blob in SharedPreferences — revisit at ~1 MB, measure first.
+- `ponytail:` no timezone database; day keys are local calendar days.
+- `ponytail:` recurring rules materialise on app open, not in the background.
+- **No undo, anywhere.** The snackbars were removed on request, and they carried every undo path.
+  Deleting asks; adding from a pinned chip does not, because the row lands at the top of RECENT
+  where it can be opened and deleted.
+- **Hiding covers the overview only.** The ledger and insights are screens you go to on purpose.
+- **Recurring rules cannot be edited**, only added and stopped.
+- **`showPennyMoment` and `claimMoment` are unused**, and with them `Penny.focus` and
+  `Penny.complete` — two poses that ship and are never drawn. Savings goals are what they are
+  for.
 
 ## Suggested next
 
-Straight from the feature list above, in the order that pays best:
-
 ```
-v1.1  ~~quick-add~~ shipped as pinned shortcuts · duplicate · CSV export
-v1.2  calendar month view · month-over-month · budgets (dim, never red)
+next   duplicate a transaction · CSV export · edit a recurring rule
+then   calendar month view · month-over-month · budgets (dim, never red)
+       savings goals — which is what the celebration machinery is waiting for
+v2     holdings · net worth · XIRR · AMFI NAV import · asset allocation
 ```
