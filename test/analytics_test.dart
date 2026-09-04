@@ -180,4 +180,91 @@ void main() {
           isNull);
     });
   });
+
+  group('quick add', () {
+    Txn spend(int amount, String day, {String note = '', String cat = 'food'}) =>
+        tx(TxKind.expense, amount, day, category: cat)..note = note;
+
+    test('offers the same thing again, best first', () {
+      final txns = [
+        spend(2000, '2026-09-04', note: 'chai'),
+        spend(240000, '2026-09-03', note: 'shoes', cat: 'shopping'),
+        spend(2000, '2026-09-02', note: 'chai'),
+        spend(2000, '2026-09-01', note: 'chai'),
+      ];
+      final q = quickAdds(txns);
+      // Frequency beats recency: the chai bought three times outranks the
+      // one-off pair of shoes, even though the shoes are more recent than two
+      // of the three.
+      expect(q.first.note, 'chai');
+      expect(q.first.amountMinor, 2000);
+      expect(q, hasLength(2));
+      expect(q.last.note, 'shoes');
+    });
+
+    test('identical entries collapse to one suggestion', () {
+      final txns = [for (var i = 0; i < 5; i++) spend(2000, '2026-09-0${i + 1}', note: 'chai')];
+      expect(quickAdds(txns), hasLength(1));
+    });
+
+    test('the same amount in a different category is a different suggestion',
+        () {
+      final txns = [
+        spend(2000, '2026-09-02', note: 'chai'),
+        spend(2000, '2026-09-01', note: 'chai', cat: 'travel'),
+      ];
+      expect(quickAdds(txns), hasLength(2));
+    });
+
+    test('a different note is a different suggestion', () {
+      final txns = [
+        spend(2000, '2026-09-02', note: 'chai'),
+        spend(2000, '2026-09-01', note: 'coffee'),
+      ];
+      expect(quickAdds(txns), hasLength(2));
+    });
+
+    test('transfers are never suggested', () {
+      final txns = [
+        tx(TxKind.transfer, 500000, '2026-09-02', to: 'a2'),
+        spend(2000, '2026-09-01', note: 'chai'),
+      ];
+      final q = quickAdds(txns);
+      expect(q, hasLength(1));
+      expect(q.single.kind, TxKind.expense);
+    });
+
+    test('income is suggested too', () {
+      final txns = [tx(TxKind.income, 500000, '2026-09-01', category: 'salary')];
+      expect(quickAdds(txns).single.kind, TxKind.income);
+    });
+
+    test('an empty ledger suggests nothing', () {
+      expect(quickAdds([]), isEmpty);
+    });
+
+    test('only the most recent stretch is scanned', () {
+      // A thing bought weekly two years ago should not outrank this week.
+      final old = [for (var i = 0; i < 80; i++) spend(9900, '2024-01-01', note: 'old')];
+      final recent = [spend(2000, '2026-09-04', note: 'chai')];
+      final q = quickAdds([...recent, ...old], scan: 10);
+      expect(q.map((e) => e.note), contains('chai'));
+    });
+
+    test('the list is capped', () {
+      final txns = [
+        for (var i = 0; i < 20; i++) spend(100 * (i + 1), '2026-09-01', note: 'n$i')
+      ];
+      expect(quickAdds(txns, limit: 4), hasLength(4));
+    });
+
+    test('a suggestion becomes a transaction dated today', () {
+      final q = quickAdds([spend(2000, '2026-09-01', note: 'chai')]).single;
+      final t = txnFrom(q);
+      expect(t.day, dayKey(today()));
+      expect(t.amountMinor, 2000);
+      expect(t.note, 'chai');
+      expect(t.kind, TxKind.expense);
+    });
+  });
 }

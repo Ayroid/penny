@@ -307,4 +307,64 @@ void main() {
           Brightness.dark);
     });
   });
+
+  group('quick add', () {
+    Future<PennyStore> withHistory() async {
+      final store = await emptyStore();
+      final cash = store.accounts.first.id;
+      final food = store.categoriesOf(TxKind.expense).first.id;
+      for (var i = 0; i < 3; i++) {
+        store.addTxn(Txn(
+            kind: TxKind.expense,
+            amountMinor: 2000,
+            day: dayKey(shiftDays(today(), -i)),
+            categoryId: food,
+            accountId: cash,
+            note: 'chai'));
+      }
+      return store;
+    }
+
+    testWidgets('a repeated entry becomes a one-tap chip', (tester) async {
+      final store = await withHistory();
+      await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Add chai, ₹20'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Add chai, ₹20'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns, hasLength(4));
+      expect(store.txns.first.note, 'chai');
+      expect(store.txns.first.amountMinor, 2000);
+      expect(store.txns.first.day, dayKey(today()),
+          reason: 'a quick add lands on today, not on the day it copied');
+    });
+
+    testWidgets('one tap adds it, one more takes it back', (tester) async {
+      final store = await withHistory();
+      await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Add chai, ₹20'));
+      await tester.pumpAndSettle();
+      expect(store.txns, hasLength(4));
+
+      // Added on one tap, so a mis-tap must cost one tap to reverse — not a
+      // trip through the ledger to find the row.
+      await tester.tap(find.text('UNDO'));
+      await tester.pumpAndSettle();
+      expect(store.txns, hasLength(3));
+    });
+
+    testWidgets('an empty ledger shows no chips', (tester) async {
+      final store = await emptyStore();
+      await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+      await tester.pumpAndSettle();
+      // Scoped to a quick-add chip's own label shape — the empty state has an
+      // "Add a transaction" button of its own, which is not a chip.
+      expect(find.bySemanticsLabel(RegExp(r'^Add .+, ₹')), findsNothing);
+    });
+  });
 }

@@ -89,6 +89,11 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _BalanceCard(store: store),
 
+                  if (store.txns.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _QuickAddStrip(store: store),
+                  ],
+
                   // A brand-new ledger skips the period controls entirely.
                   // Three cards of zeroes and an unlit heatmap push the one
                   // thing there is to do below the fold, and the empty state
@@ -445,6 +450,134 @@ class _Cell extends StatelessWidget {
             color: colour,
             borderRadius: BorderRadius.circular(5),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tap to enter a thing you enter often.
+///
+/// The point of the whole screen: a money app is abandoned over entry
+/// friction, and "chai ₹20" typed once should never need typing again.
+class _QuickAddStrip extends StatelessWidget {
+  const _QuickAddStrip({required this.store});
+
+  final PennyStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final suggestions = quickAdds(store.txns);
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Labelled, because a bare row of chips reads as a filter, and one
+        // that silently spends money on a mis-tap is a bad surprise. Same
+        // overline as RECENT and SPEND BY DAY.
+        Padding(
+          padding: const EdgeInsets.only(left: 8, bottom: 6),
+          child: Text(
+            'TAP TO ADD AGAIN',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ),
+        SizedBox(
+          height: 44,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.zero,
+            itemCount: suggestions.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, i) =>
+                _QuickAddChip(store: store, suggestion: suggestions[i]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAddChip extends StatelessWidget {
+  const _QuickAddChip({required this.store, required this.suggestion});
+
+  final PennyStore store;
+  final QuickAdd suggestion;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final category = store.categoryById(suggestion.categoryId);
+    final colour = catColorAt(category?.color ?? defaultCatColor);
+    final label = suggestion.note.isNotEmpty
+        ? suggestion.note
+        : category?.name ?? 'Again';
+    final amount = suggestion.kind == TxKind.income
+        ? rupeesWhole(suggestion.amountMinor, signed: true)
+        : rupeesWhole(suggestion.amountMinor);
+
+    return Semantics(
+      button: true,
+      label: 'Add $label, $amount',
+      excludeSemantics: true,
+      child: Material(
+        color: colour.withValues(alpha: isDark(context) ? 0.15 : 0.12),
+        borderRadius: BorderRadius.circular(pill),
+        child: InkWell(
+          onTap: () => _add(context),
+          borderRadius: BorderRadius.circular(pill),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  iconFor(category?.icon ?? defaultIcon),
+                  size: 15,
+                  color: colour,
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  amount,
+                  style: mono(
+                    12,
+                    color: scheme.secondary,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _add(BuildContext context) {
+    final txn = txnFrom(suggestion);
+    store.addTxn(txn);
+
+    // Added on one tap, so it has to be undoable on one more. Without this the
+    // shortcut is a trap: a mis-tap costs a trip through the ledger to find
+    // and delete the row.
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Added ${rupees(txn.amountMinor)}'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () => store.removeTxn(txn),
         ),
       ),
     );

@@ -156,3 +156,64 @@ int? changeVsPrevious(List<Txn> txns, Period period, DateTime anchor,
   final b = kind == TxKind.income ? then.income : then.expense;
   return a - b;
 }
+
+// ── Quick add ───────────────────────────────────────────────────────────────
+
+/// A transaction worth offering as a one-tap repeat.
+///
+/// A record rather than a class so equality is structural — two entries for the
+/// same category, account, amount and note *are* the same suggestion, and that
+/// falls out of the language instead of a hand-written `==`.
+typedef QuickAdd = ({
+  TxKind kind,
+  int amountMinor,
+  String categoryId,
+  String accountId,
+  String note,
+});
+
+/// The handful of entries most worth repeating, best first.
+///
+/// Ranked by how often a thing has been entered, then by how recently. Pure
+/// recency puts a one-off ₹2,400 shopping trip ahead of the ₹20 chai bought
+/// five times this week, and it is the chai that wants a shortcut.
+///
+/// Transfers are excluded: they need a destination account, so "the same
+/// again" is a weaker claim and the sheet is the right place to make it.
+List<QuickAdd> quickAdds(List<Txn> txns, {int scan = 60, int limit = 6}) {
+  final count = <QuickAdd, int>{};
+  final firstSeen = <QuickAdd, int>{};
+
+  var i = 0;
+  for (final t in txns.take(scan)) {
+    if (t.kind == TxKind.transfer) continue;
+    final key = (
+      kind: t.kind,
+      amountMinor: t.amountMinor,
+      categoryId: t.categoryId,
+      accountId: t.accountId,
+      note: t.note,
+    );
+    count[key] = (count[key] ?? 0) + 1;
+    firstSeen.putIfAbsent(key, () => i);
+    i++;
+  }
+
+  final ranked = count.keys.toList()
+    ..sort((a, b) {
+      final byCount = count[b]!.compareTo(count[a]!);
+      return byCount != 0 ? byCount : firstSeen[a]!.compareTo(firstSeen[b]!);
+    });
+
+  return ranked.take(limit).toList();
+}
+
+/// [suggestion] as a transaction, dated today.
+Txn txnFrom(QuickAdd suggestion) => Txn(
+      kind: suggestion.kind,
+      amountMinor: suggestion.amountMinor,
+      day: dayKey(today()),
+      categoryId: suggestion.categoryId,
+      accountId: suggestion.accountId,
+      note: suggestion.note,
+    );
