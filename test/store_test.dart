@@ -356,4 +356,125 @@ void main() {
       expect(s.claimMoment('something-else'), isTrue);
     });
   });
+
+  group('pinned shortcuts', () {
+    Future<(PennyStore, Shortcut)> withPin() async {
+      final s = await seeded();
+      final pin = Shortcut(
+        kind: TxKind.expense,
+        amountMinor: 2000,
+        categoryId: cat(s, 'Food & Drink'),
+        accountId: acc(s, 'Cash'),
+        note: 'chai',
+      );
+      s.addShortcut(pin);
+      return (s, pin);
+    }
+
+    test('a shortcut becomes a transaction dated today', () async {
+      final (s, pin) = await withPin();
+      final t = pin.toTxn();
+      expect(t.day, dayKey(today()));
+      expect(t.amountMinor, 2000);
+      expect(t.note, 'chai');
+      expect(t.kind, TxKind.expense);
+      expect(s.shortcuts, hasLength(1));
+    });
+
+    test('pinning the same thing twice adds nothing', () async {
+      final (s, pin) = await withPin();
+      final again = Shortcut(
+        kind: pin.kind,
+        amountMinor: pin.amountMinor,
+        categoryId: pin.categoryId,
+        accountId: pin.accountId,
+        note: pin.note,
+      );
+      expect(s.addShortcut(again), isFalse);
+      expect(s.shortcuts, hasLength(1));
+    });
+
+    test('the same amount from a different account is a different pin',
+        () async {
+      final (s, pin) = await withPin();
+      expect(
+        s.addShortcut(Shortcut(
+          kind: pin.kind,
+          amountMinor: pin.amountMinor,
+          categoryId: pin.categoryId,
+          accountId: acc(s, 'Bank'),
+          note: pin.note,
+        )),
+        isTrue,
+      );
+      expect(s.shortcuts, hasLength(2));
+    });
+
+    test('a transaction finds the pin that matches it', () async {
+      final (s, pin) = await withPin();
+      final matching = pin.toTxn();
+      expect(s.shortcutFor(matching)?.id, pin.id);
+
+      final different = Txn(
+          kind: TxKind.expense,
+          amountMinor: 9999,
+          day: dayKey(today()),
+          categoryId: pin.categoryId,
+          accountId: pin.accountId);
+      expect(s.shortcutFor(different), isNull);
+    });
+
+    test('unpinning and putting it back keeps the order', () async {
+      final s = await seeded();
+      final food = cat(s, 'Food & Drink'), cash = acc(s, 'Cash');
+      for (final note in ['chai', 'bus', 'lunch']) {
+        s.addShortcut(Shortcut(
+            kind: TxKind.expense,
+            amountMinor: 2000,
+            categoryId: food,
+            accountId: cash,
+            note: note));
+      }
+      final middle = s.shortcuts[1];
+      s.removeShortcut(middle);
+      expect(s.shortcuts.map((x) => x.note), ['chai', 'lunch']);
+
+      s.insertShortcutAt(1, middle);
+      expect(s.shortcuts.map((x) => x.note), ['chai', 'bus', 'lunch']);
+    });
+
+    test('pins survive a save and reload', () async {
+      await withPin();
+      await Future<void>.delayed(Duration.zero);
+
+      final next = await loaded();
+      expect(next.shortcuts, hasLength(1));
+      expect(next.shortcuts.single.note, 'chai');
+      expect(next.shortcuts.single.amountMinor, 2000);
+    });
+
+    test('a pin survives export and import', () async {
+      final (s, _) = await withPin();
+      final fresh = await loaded();
+      expect(fresh.importJson(s.exportJson()), isTrue);
+      expect(fresh.shortcuts.single.note, 'chai');
+    });
+
+    test('a pin pointing at a deleted account is dropped, not repointed',
+        () async {
+      // Adopting it would spend from the wrong account on a single tap — a
+      // shortcut is a convenience, not a record worth rescuing.
+      final s = await loaded();
+      s.importJson('''
+        {"accounts":[{"id":"a1","name":"Cash","opening":0}],
+         "categories":[{"id":"c1","name":"Food","kind":"expense"}],
+         "txns":[],
+         "shortcuts":[
+           {"id":"s1","kind":"expense","amount":2000,"category":"c1","account":"a1"},
+           {"id":"s2","kind":"expense","amount":2000,"category":"c1","account":"ghost"}
+         ]}
+      ''');
+      expect(s.shortcuts.map((x) => x.id), ['s1']);
+    });
+  });
 }

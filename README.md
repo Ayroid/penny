@@ -7,6 +7,8 @@ with the daily, weekly and monthly picture. Everything stays on the phone.
 
 - **Add in seconds.** The amount field opens with the numeric keyboard already
   up; everything else has a sensible default.
+- **Pin what you repeat.** Mark a transaction as pinned and it becomes a
+  one-tap chip on the overview. Curated by you, never guessed at.
 - **Accounts and transfers.** Moving cash from the bank isn't spending, and the
   month's totals know it.
 - **Categories** you can rename, recolour and archive, each with its own icon.

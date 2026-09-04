@@ -89,6 +89,14 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _BalanceCard(store: store),
 
+                  // Gated on what is pinned, not on whether there is history:
+                  // deleting every transaction should not silently drop the
+                  // shortcuts someone chose to keep.
+                  if (store.shortcuts.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _QuickAddStrip(store: store),
+                  ],
+
                   // A brand-new ledger skips the period controls entirely.
                   // Three cards of zeroes and an unlit heatmap push the one
                   // thing there is to do below the fold, and the empty state
@@ -477,6 +485,155 @@ class _Cell extends StatelessWidget {
             color: colour,
             borderRadius: BorderRadius.circular(5),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tap to enter a thing you enter often.
+///
+/// The point of the whole screen: a money app is abandoned over entry
+/// friction, and "chai ₹20" typed once should never need typing again.
+class _QuickAddStrip extends StatelessWidget {
+  const _QuickAddStrip({required this.store});
+
+  final PennyStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final pinned = store.shortcuts;
+    if (pinned.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Labelled, because a bare row of chips reads as a filter, and one
+        // that silently spends money on a mis-tap is a bad surprise. Same
+        // overline as RECENT and SPEND BY DAY.
+        Padding(
+          padding: const EdgeInsets.only(left: 8, bottom: 6),
+          child: Text(
+            'PINNED',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ),
+        SizedBox(
+          height: 44,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.zero,
+            itemCount: pinned.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, i) =>
+                _QuickAddChip(store: store, shortcut: pinned[i]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAddChip extends StatelessWidget {
+  const _QuickAddChip({required this.store, required this.shortcut});
+
+  final PennyStore store;
+  final Shortcut shortcut;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final category = store.categoryById(shortcut.categoryId);
+    final colour = catColorAt(category?.color ?? defaultCatColor);
+    final label = shortcut.note.isNotEmpty
+        ? shortcut.note
+        : category?.name ?? 'Pinned';
+    final amount = shortcut.kind == TxKind.income
+        ? rupeesWhole(shortcut.amountMinor, signed: true)
+        : rupeesWhole(shortcut.amountMinor);
+
+    return Semantics(
+      button: true,
+      label: 'Add $label, $amount',
+      hint: 'Long press to unpin',
+      excludeSemantics: true,
+      child: Material(
+        color: colour.withValues(alpha: isDark(context) ? 0.15 : 0.12),
+        borderRadius: BorderRadius.circular(pill),
+        child: InkWell(
+          onTap: () => _add(context),
+          onLongPress: () => _unpin(context),
+          borderRadius: BorderRadius.circular(pill),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  iconFor(category?.icon ?? defaultIcon),
+                  size: 15,
+                  color: colour,
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  amount,
+                  style: mono(
+                    12,
+                    color: scheme.secondary,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _add(BuildContext context) {
+    final txn = shortcut.toTxn();
+    store.addTxn(txn);
+
+    // Added on one tap, so it has to be undoable on one more. Without this the
+    // shortcut is a trap: a mis-tap costs a trip through the ledger to find
+    // and delete the row.
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Added ${rupees(txn.amountMinor)}'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () => store.removeTxn(txn),
+        ),
+      ),
+    );
+  }
+
+  void _unpin(BuildContext context) {
+    final at = store.shortcuts.indexWhere((s) => s.id == shortcut.id);
+    store.removeShortcut(shortcut);
+
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Unpinned'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'UNDO',
+          // Back where it was, not on the end — the strip's order is the order
+          // things were pinned in, and an undo should not quietly reorder it.
+          onPressed: () => store.insertShortcutAt(at, shortcut),
         ),
       ),
     );
