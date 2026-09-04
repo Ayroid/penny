@@ -159,12 +159,15 @@ class _HomePageState extends State<HomePage> {
 
                     _FlowCard(totals: totals, hidden: store.hideAmounts),
 
-                    if (_period == Period.month) ...[
+                    // Week and month both get the grid — a week is simply one
+                    // row of it. A single day would be one cell, which tells
+                    // you nothing the figures above have not.
+                    if (_period != Period.day) ...[
                       const SizedBox(height: 12),
                       _SpendHeatmap(
                         spend: spendByDay(store.txns, range),
                         hidden: store.hideAmounts,
-                        month: parseDay(range.from),
+                        range: range,
                       ),
                     ],
 
@@ -419,22 +422,35 @@ class _MeterDivider extends StatelessWidget {
 class _SpendHeatmap extends StatelessWidget {
   const _SpendHeatmap({
     required this.spend,
-    required this.month,
+    required this.range,
     required this.hidden,
   });
 
   final Map<String, int> spend;
-  final DateTime month;
+
+  /// The days to draw. A month lays out as a calendar with leading blanks; a
+  /// week is the same grid with exactly seven cells and none.
+  final Range range;
   final bool hidden;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final days = DateTime(month.year, month.month + 1, 0).day;
-    final peak = spend.values.fold(0, (a, b) => a > b ? a : b);
+    final from = parseDay(range.from);
 
-    // Monday-first columns, with the leading blanks the month starts on.
-    final lead = DateTime(month.year, month.month).weekday - 1;
+    // Walked a day at a time rather than by subtracting dates: a Duration is
+    // 24 real hours and lands on the wrong calendar day across a DST change.
+    final dates = <DateTime>[];
+    for (
+      var d = from;
+      dayKey(d).compareTo(range.to) <= 0;
+      d = shiftDays(d, 1)
+    ) {
+      dates.add(d);
+    }
+
+    final peak = spend.values.fold(0, (a, b) => a > b ? a : b);
+    final lead = from.weekday - 1;
 
     return TintCard(
       padding: const EdgeInsets.all(14),
@@ -483,11 +499,10 @@ class _SpendHeatmap extends StatelessWidget {
             crossAxisSpacing: 4,
             children: [
               for (var i = 0; i < lead; i++) const SizedBox.shrink(),
-              for (var d = 1; d <= days; d++)
+              for (final d in dates)
                 _Cell(
-                  day: d,
-                  amount:
-                      spend[dayKey(DateTime(month.year, month.month, d))] ?? 0,
+                  day: d.day,
+                  amount: spend[dayKey(d)] ?? 0,
                   peak: peak,
                   hidden: hidden,
                 ),

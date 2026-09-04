@@ -669,4 +669,62 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
     });
   });
+
+  group('the spend grid', () {
+    Future<PennyStore> aWeek(WidgetTester tester) async {
+      final store = await emptyStore();
+      final cash = store.accounts.first.id;
+      final food = store.categoriesOf(TxKind.expense).first.id;
+      // Something on today and something three days back, both inside the
+      // current week only if today is late enough in it — so anchor on the
+      // week's own Monday instead.
+      for (final offset in [0, 1]) {
+        store.addTxn(Txn(
+            kind: TxKind.expense,
+            amountMinor: 45000 * (offset + 1),
+            day: dayKey(shiftDays(startOfWeek(today()), offset)),
+            categoryId: food,
+            accountId: cash));
+      }
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      return store;
+    }
+
+    testWidgets('the week shows exactly seven days', (tester) async {
+      phone(tester);
+      await aWeek(tester);
+
+      await tester.tap(find.text('Week'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('SPEND BY DAY'), findsOneWidget);
+      final monday = startOfWeek(today());
+      for (var i = 0; i < 7; i++) {
+        final d = shiftDays(monday, i);
+        expect(find.bySemanticsLabel(RegExp('^Day ${d.day}\\b')), findsOneWidget,
+            reason: 'day ${d.day} of the week is missing');
+      }
+    });
+
+    testWidgets('a day shows no grid — one cell says nothing', (tester) async {
+      phone(tester);
+      await aWeek(tester);
+
+      await tester.tap(find.text('Day'));
+      await tester.pumpAndSettle();
+      expect(find.text('SPEND BY DAY'), findsNothing);
+    });
+
+    testWidgets('the month still lays out as a calendar', (tester) async {
+      phone(tester);
+      await aWeek(tester);
+
+      // Month is the default. The first of the month sits under its own
+      // weekday, so the grid has leading blanks the week does not.
+      expect(find.text('SPEND BY DAY'), findsOneWidget);
+      final last = DateTime(today().year, today().month + 1, 0).day;
+      expect(find.bySemanticsLabel(RegExp('^Day $last\\b')), findsOneWidget);
+    });
+  });
 }

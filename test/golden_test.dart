@@ -182,6 +182,27 @@ void main() {
         dark: true);
   });
 
+  testWidgets('overview week', (tester) async {
+    final store = await seeded();
+    tester.view
+      ..physicalSize = const Size(1080, 2280)
+      ..devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: appTheme(dark: false),
+      home: HomePage(store: store, onSettings: () {}),
+    ));
+    await tester.pumpAndSettle();
+    await settleImages(tester);
+    await tester.tap(find.text('Week'));
+    await tester.pumpAndSettle();
+
+    await expectLater(find.byType(MaterialApp),
+        matchesGoldenFile('goldens/overview_week.png'));
+  });
+
   testWidgets('overview empty', (tester) async {
     final store = PennyStore();
     await store.load();
