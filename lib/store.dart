@@ -509,7 +509,7 @@ class PennyStore extends ChangeNotifier {
     accounts.addAll([
       Account(name: 'Cash', icon: 'banknote', color: 2),
       Account(name: 'Bank', icon: 'landmark', color: 10),
-      Account(name: 'Card', icon: 'credit-card', color: 12),
+      Account(name: 'Wallet', icon: 'wallet', color: 12),
     ]);
 
     const expenses = [

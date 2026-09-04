@@ -63,7 +63,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     pose: Penny.thinking,
                     headline: 'Accounts and categories',
                     body:
-                        'Starting you with Cash, Bank and Card, and the categories most '
+                        'Starting you with Cash, Bank and Wallet, and the categories most '
                         'spending falls into. Rename, recolour or archive any of them later.',
                   ),
                   _Page(

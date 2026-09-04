@@ -131,8 +131,8 @@ class _LedgerPageState extends State<LedgerPage> {
                   Segmented<TxKind?>(
                     options: const {
                       null: 'All',
-                      TxKind.expense: 'Out',
-                      TxKind.income: 'In',
+                      TxKind.expense: 'Debit',
+                      TxKind.income: 'Credit',
                     },
                     value: _kind,
                     onChanged: (k) => setState(() => _kind = k),

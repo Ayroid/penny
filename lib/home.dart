@@ -250,7 +250,12 @@ class _BalanceCard extends StatelessWidget {
   }
 }
 
-/// In, out, and the difference.
+/// In, out, and the difference — read at a glance, like a speed meter.
+///
+/// Three figures on one line rather than three stacked bars. The bars measured
+/// the period against itself, which is a comparison nobody needs: what this
+/// card is for is the two numbers and their difference. Comparing a period to
+/// other periods is the trend chart's job, on Insights.
 class _FlowCard extends StatelessWidget {
   const _FlowCard({required this.totals});
 
@@ -259,87 +264,114 @@ class _FlowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final peak = [
-      totals.income,
-      totals.expense,
-      1,
-    ].reduce((a, b) => a > b ? a : b);
-
-    Widget bar(String label, int value, Color colour) => Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(label, style: text.labelSmall),
-              const Spacer(),
-              // The amount sits beside the bar, never on it — see the note
-              // on `coin` in theme.dart.
-              Text(
-                rupees(value),
-                style: mono(
-                  13.5,
-                  color: scheme.onSurface,
-                  weight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(pill),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: (value / peak * 1000).round().clamp(1, 1000),
-                  child: Container(height: 8, color: colour),
-                ),
-                Expanded(
-                  flex: (1000 - value / peak * 1000).round().clamp(0, 999),
-                  child: Container(
-                    height: 8,
-                    color: scheme.surfaceContainerHighest,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
 
     return TintCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-      child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          bar('IN', totals.income, sproutOf(context)),
-          bar('OUT', totals.expense, coinOf(context)),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              children: [
-                Text('NET', style: text.labelSmall),
-                const Spacer(),
-                Text(
-                  rupees(totals.net, signed: true),
-                  // Not red when negative. A month that ended down is ordinary,
-                  // not a failure — the design system is explicit about this.
-                  style: mono(
-                    15,
-                    color: scheme.onSurface,
-                    weight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
+          _Meter(
+            // Credit is money arriving and debit is money leaving — the way
+            // a bank statement reads, not the way double-entry bookkeeping
+            // does. Down is arriving and up is leaving, the way a network
+            // meter reads; direction carries the meaning on its own, so the
+            // colour is reinforcement rather than the only signal.
+            icon: LucideIcons.arrowDownLeft,
+            colour: sproutOf(context),
+            label: 'CREDIT',
+            amount: totals.income,
+          ),
+          _MeterDivider(colour: scheme.outline),
+          _Meter(
+            icon: LucideIcons.arrowUpRight,
+            colour: coinOf(context),
+            label: 'DEBIT',
+            amount: totals.expense,
+          ),
+          _MeterDivider(colour: scheme.outline),
+          _Meter(
+            label: 'NET',
+            amount: totals.net,
+            signed: true,
+            // Not red when negative. A period that ended down is ordinary,
+            // not a failure — the design system is explicit about this.
+            colour: scheme.secondary,
           ),
         ],
       ),
     );
   }
+}
+
+class _Meter extends StatelessWidget {
+  const _Meter({
+    required this.label,
+    required this.amount,
+    required this.colour,
+    this.icon,
+    this.signed = false,
+  });
+
+  final String label;
+  final int amount;
+  final Color colour;
+  final IconData? icon;
+  final bool signed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return Expanded(
+      child: Semantics(
+        label: '$label, ${rupees(amount, signed: signed)}',
+        excludeSemantics: true,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 13, color: colour),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(label, style: text.labelSmall),
+                ],
+              ),
+              const SizedBox(height: 3),
+              // Scaled down rather than wrapped or clipped: three amounts on
+              // one line is tight on a narrow phone, and a lakh is not unusual.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  rupees(amount, signed: signed),
+                  style: mono(
+                    14,
+                    color: scheme.onSurface,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MeterDivider extends StatelessWidget {
+  const _MeterDivider({required this.colour});
+
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(width: 1, height: 30, color: colour);
 }
 
 /// A month of days, each shaded by what was spent on it.
