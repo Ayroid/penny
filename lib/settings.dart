@@ -12,9 +12,9 @@ import 'recurring.dart';
 import 'store.dart';
 import 'theme.dart';
 
-void openSettings(BuildContext context, PennyStore store) =>
-    Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => SettingsScreen(store: store)));
+void openSettings(BuildContext context, PennyStore store) => Navigator.of(
+  context,
+).push(MaterialPageRoute(builder: (_) => SettingsScreen(store: store)));
 
 /// Everything that is not a transaction.
 ///
@@ -48,9 +48,9 @@ class _Body extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     Widget section(String label) => Padding(
-          padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
-          child: Text(label.toUpperCase(), style: text.labelSmall),
-        );
+      padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
+      child: Text(label.toUpperCase(), style: text.labelSmall),
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
@@ -86,9 +86,10 @@ class _Body extends StatelessWidget {
                 icon: LucideIcons.tag,
                 label: 'Categories',
                 subtitle: plural(
-                    store.categories.where((c) => !c.archived).length,
-                    'category',
-                    'categories'),
+                  store.categories.where((c) => !c.archived).length,
+                  'category',
+                  'categories',
+                ),
                 onTap: () => _showCategories(context, store),
               ),
               _Row(
@@ -170,11 +171,15 @@ class _Row extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(label,
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        label,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       if (subtitle != null)
-                        Text(subtitle!,
-                            style: Theme.of(context).textTheme.bodySmall),
+                        Text(
+                          subtitle!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                     ],
                   ),
                 ),
@@ -221,26 +226,49 @@ Future<void> _import(BuildContext context, PennyStore store) async {
     builder: (context) => AlertDialog(
       title: const Text('Replace everything?'),
       content: Text(
-          'This will replace all ${store.txns.length} transactions, accounts and categories with what is in that file.'),
+        'This will replace all ${store.txns.length} transactions, accounts and categories with what is in that file.',
+      ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context, true),
-          child: Text('Replace',
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          child: Text(
+            'Replace',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
         ),
       ],
     ),
   );
   if (ok != true || !context.mounted) return;
 
-  final messenger = ScaffoldMessenger.of(context);
-  final good = store.importJson(raw);
-  messenger.showSnackBar(SnackBar(
-    content: Text(good ? 'Backup restored' : 'That file could not be read'),
-  ));
+  // A successful restore announces itself — the ledger behind this screen is
+  // suddenly someone else's. A failure has to be told, though: silently doing
+  // nothing after "Replace everything?" reads as success, and the person walks
+  // away believing a backup was restored when it was not.
+  if (store.importJson(raw)) return;
+  if (!context.mounted) return;
+
+  await showDialog<void>(
+    context: context,
+    barrierColor: navy.withValues(alpha: 0.32),
+    builder: (context) => AlertDialog(
+      title: const Text('That file could not be read'),
+      content: const Text(
+        'Nothing was changed. Check it is a Penny backup — the JSON file the '
+        'export produces.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
 }
 
 // ── Accounts ────────────────────────────────────────────────────────────────
@@ -271,7 +299,10 @@ Future<void> _showAccounts(BuildContext context, PennyStore store) {
 }
 
 Future<void> _editAccount(
-    BuildContext context, PennyStore store, Account? existing) {
+  BuildContext context,
+  PennyStore store,
+  Account? existing,
+) {
   final name = TextEditingController(text: existing?.name ?? '');
   var opening = existing?.openingBalanceMinor ?? 0;
   var colour = existing?.color ?? defaultCatColor;
@@ -290,8 +321,10 @@ Future<void> _editAccount(
         onColour: (c) => setSheet(() => colour = c),
         onIcon: (i) => setSheet(() => icon = i),
         extra: [
-          Text('OPENING BALANCE',
-              style: Theme.of(context).textTheme.labelSmall),
+          Text(
+            'OPENING BALANCE',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
           const SizedBox(height: 6),
           _SignedAmountField(
             value: opening,
@@ -309,11 +342,14 @@ Future<void> _editAccount(
             ? null
             : () {
                 if (existing == null) {
-                  store.addAccount(Account(
+                  store.addAccount(
+                    Account(
                       name: name.text.trim(),
                       icon: icon,
                       color: colour,
-                      openingBalanceMinor: opening));
+                      openingBalanceMinor: opening,
+                    ),
+                  );
                 } else {
                   existing
                     ..name = name.text.trim()
@@ -344,8 +380,10 @@ Future<void> _showCategories(BuildContext context, PennyStore store) {
           for (final kind in [TxKind.expense, TxKind.income]) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
-              child: Text(kind == TxKind.expense ? 'SPENDING' : 'INCOME',
-                  style: Theme.of(context).textTheme.labelSmall),
+              child: Text(
+                kind == TxKind.expense ? 'SPENDING' : 'INCOME',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
             ),
             for (final c in store.categories.where((c) => c.kind == kind))
               _EditableRow(
@@ -363,7 +401,10 @@ Future<void> _showCategories(BuildContext context, PennyStore store) {
 }
 
 Future<void> _editCategory(
-    BuildContext context, PennyStore store, Category? existing) {
+  BuildContext context,
+  PennyStore store,
+  Category? existing,
+) {
   final name = TextEditingController(text: existing?.name ?? '');
   var colour = existing?.color ?? defaultCatColor;
   var icon = existing?.icon ?? defaultIcon;
@@ -386,7 +427,7 @@ Future<void> _editCategory(
             Segmented<TxKind>(
               options: const {
                 TxKind.expense: 'Spending',
-                TxKind.income: 'Income'
+                TxKind.income: 'Income',
               },
               value: kind,
               onChanged: (k) => setSheet(() => kind = k),
@@ -403,11 +444,14 @@ Future<void> _editCategory(
             ? null
             : () {
                 if (existing == null) {
-                  store.addCategory(Category(
+                  store.addCategory(
+                    Category(
                       name: name.text.trim(),
                       kind: kind,
                       icon: icon,
-                      color: colour));
+                      color: colour,
+                    ),
+                  );
                 } else {
                   existing
                     ..name = name.text.trim()
@@ -441,7 +485,8 @@ Future<void> _showRules(BuildContext context, PennyStore store) {
             _EditableRow(
               icon: iconFor(store.categoryById(r.categoryId)?.icon ?? 'repeat'),
               colour: catColorAt(
-                  store.categoryById(r.categoryId)?.color ?? defaultCatColor),
+                store.categoryById(r.categoryId)?.color ?? defaultCatColor,
+              ),
               label: r.note.isEmpty
                   ? store.categoryById(r.categoryId)?.name ?? 'Rule'
                   : r.note,
@@ -456,22 +501,29 @@ Future<void> _showRules(BuildContext context, PennyStore store) {
 }
 
 Future<void> _confirmRemoveRule(
-    BuildContext context, PennyStore store, Rule rule) async {
+  BuildContext context,
+  PennyStore store,
+  Rule rule,
+) async {
   final go = await showDialog<bool>(
     context: context,
     barrierColor: navy.withValues(alpha: 0.32),
     builder: (context) => AlertDialog(
       title: const Text('Stop this rule?'),
       content: const Text(
-          'Transactions it has already added stay in the ledger. Only future ones stop.'),
+        'Transactions it has already added stay in the ledger. Only future ones stop.',
+      ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep')),
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Keep'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context, true),
-          child: Text('Stop',
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          child: Text(
+            'Stop',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
         ),
       ],
     ),
@@ -498,7 +550,10 @@ Future<void> _editRule(BuildContext context, PennyStore store) {
           title: 'New rule',
           children: [
             Segmented<TxKind>(
-              options: const {TxKind.expense: 'Spending', TxKind.income: 'Income'},
+              options: const {
+                TxKind.expense: 'Spending',
+                TxKind.income: 'Income',
+              },
               value: kind,
               onChanged: (k) => setSheet(() {
                 kind = k;
@@ -575,15 +630,17 @@ Future<void> _editRule(BuildContext context, PennyStore store) {
               onPressed: amount <= 0
                   ? null
                   : () {
-                      store.addRule(Rule(
-                        kind: kind,
-                        amountMinor: amount,
-                        categoryId: categoryId,
-                        accountId: accountId,
-                        note: note.text.trim(),
-                        freq: freq,
-                        startDay: dayKey(start),
-                      ));
+                      store.addRule(
+                        Rule(
+                          kind: kind,
+                          amountMinor: amount,
+                          categoryId: categoryId,
+                          accountId: accountId,
+                          note: note.text.trim(),
+                          freq: freq,
+                          startDay: dayKey(start),
+                        ),
+                      );
                       materialiseDue(store);
                       Navigator.pop(context);
                     },
@@ -613,7 +670,8 @@ class _SheetFrame extends StatelessWidget {
         top: false,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+          ),
           child: SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -635,8 +693,11 @@ class _SheetFrame extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                          child: Text(title,
-                              style: Theme.of(context).textTheme.titleLarge)),
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
                       ?action,
                     ],
                   ),
@@ -679,9 +740,11 @@ class _ListSheet extends StatelessWidget {
         if (empty != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Text(empty!,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall),
+            child: Text(
+              empty!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
         ...children,
       ],
@@ -723,15 +786,20 @@ class _EditableRow extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: colour.withValues(alpha: isDark(context) ? 0.15 : 0.12),
+                  color: colour.withValues(
+                    alpha: isDark(context) ? 0.15 : 0.12,
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, size: 16, color: colour),
               ),
               const SizedBox(width: 12),
               Expanded(
-                  child: Text(label,
-                      style: Theme.of(context).textTheme.titleMedium)),
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
               if (trailing != null)
                 Text(trailing!, style: mono(12, color: scheme.secondary)),
             ],
@@ -807,7 +875,8 @@ class _EditSheet extends StatelessWidget {
                         border: i == colour
                             ? Border.all(
                                 color: Theme.of(context).colorScheme.onSurface,
-                                width: 2.5)
+                                width: 2.5,
+                              )
                             : null,
                       ),
                     ),
@@ -838,18 +907,19 @@ class _EditSheet extends StatelessWidget {
                           height: 40,
                           decoration: BoxDecoration(
                             color: key == icon
-                                ? catColorAt(colour)
-                                    .withValues(alpha: 0.22)
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
+                                ? catColorAt(colour).withValues(alpha: 0.22)
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(iconFor(key),
-                              size: 18,
-                              color: key == icon
-                                  ? catColorAt(colour)
-                                  : Theme.of(context).colorScheme.secondary),
+                          child: Icon(
+                            iconFor(key),
+                            size: 18,
+                            color: key == icon
+                                ? catColorAt(colour)
+                                : Theme.of(context).colorScheme.secondary,
+                          ),
                         ),
                       ),
                     ),
@@ -909,11 +979,14 @@ class _Chip extends StatelessWidget {
             children: [
               Icon(icon, size: 14, color: colour),
               const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
             ],
           ),
         ),
@@ -943,8 +1016,9 @@ class _SignedAmountField extends StatefulWidget {
 }
 
 class _SignedAmountFieldState extends State<_SignedAmountField> {
-  late final _controller =
-      TextEditingController(text: amountFieldText(widget.value.abs()));
+  late final _controller = TextEditingController(
+    text: amountFieldText(widget.value.abs()),
+  );
   late bool _negative = widget.value < 0;
 
   @override
@@ -984,8 +1058,10 @@ class _SignedAmountFieldState extends State<_SignedAmountField> {
               hintText: '0',
               prefixText: '$rupee ',
               helperText: rupees(widget.value, signed: true),
-              helperStyle:
-                  mono(11, color: Theme.of(context).colorScheme.secondary),
+              helperStyle: mono(
+                11,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
             ),
           ),
         ),

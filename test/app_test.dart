@@ -4,6 +4,7 @@ import 'package:penny/home.dart';
 import 'package:penny/ledger_screen.dart';
 import 'package:penny/analytics_screen.dart';
 import 'package:penny/main.dart';
+import 'package:penny/money.dart';
 import 'package:penny/onboarding.dart';
 import 'package:penny/store.dart';
 import 'package:penny/txn_row.dart';
@@ -28,6 +29,16 @@ void phone(WidgetTester tester) {
     ..physicalSize = const Size(1080, 2280)
     ..devicePixelRatio = 3.0;
   addTearDown(tester.view.reset);
+}
+
+/// Drag the overview far enough for its RECENT rows to build.
+///
+/// `ListView` builds lazily, so rows below the fold are not in the element
+/// tree at all. `scrollUntilVisible` is no help here: its finder must resolve
+/// to exactly one element, which `TxnRow` does not once there are two of them.
+Future<void> scrollToRows(WidgetTester tester) async {
+  await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
+  await tester.pumpAndSettle();
 }
 
 /// The overview as the shell actually composes it.
@@ -412,7 +423,7 @@ void main() {
       expect(store.txns.first.day, dayKey(today()));
     });
 
-    testWidgets('one tap adds it, one more takes it back', (tester) async {
+    testWidgets('adding from a chip is corrected in the ledger', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
@@ -423,12 +434,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.txns, hasLength(2));
 
-      await tester.tap(find.text('UNDO'));
+      // There is no toast and no undo: the row lands at the top of RECENT, and
+      // a mis-tap is corrected by opening it and deleting it like any other.
+      await scrollToRows(tester);
+      await tester.tap(find.byType(TxnRow).first);
       await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pumpAndSettle();
+
       expect(store.txns, hasLength(1));
     });
 
-    testWidgets('long press unpins, and that is undoable too', (tester) async {
+    testWidgets('long press unpins', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
@@ -437,12 +454,11 @@ void main() {
 
       await tester.longPress(find.bySemanticsLabel('Add Food & Drink, ₹20'));
       await tester.pumpAndSettle();
+
       expect(store.shortcuts, isEmpty);
       expect(find.text('PINNED'), findsNothing);
-
-      await tester.tap(find.text('UNDO'));
-      await tester.pumpAndSettle();
-      expect(store.shortcuts, hasLength(1));
+      expect(store.txns, hasLength(1),
+          reason: 'unpinning is not deleting — the transaction stays');
     });
 
     testWidgets('pinning the same thing twice leaves one chip', (tester) async {
@@ -472,8 +488,7 @@ void main() {
       // tapping that would add another transaction instead of editing one.
       // The overview's ListView builds lazily, so the RECENT rows are not in
       // the tree until they are scrolled into it.
-      await tester.scrollUntilVisible(find.byType(TxnRow), 200,
-          scrollable: find.byType(Scrollable).first);
+      await scrollToRows(tester);
       await tester.tap(find.byType(TxnRow).first);
       await tester.pumpAndSettle();
       expect(find.bySemanticsLabel('Pinned to the overview'), findsOneWidget);
@@ -485,5 +500,76 @@ void main() {
 
       expect(store.shortcuts, isEmpty);
     });
+  });
+
+  group('hiding the balance', () {
+    testWidgets('the eye masks the total and every account', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      store.addTxn(Txn(
+          kind: TxKind.income,
+          amountMinor: 8500000,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.income).first.id,
+          accountId: store.accounts.first.id));
+
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      expect(find.text('₹85,000.00'), findsWidgets);
+
+      await tester.tap(find.byTooltip('Hide amounts'));
+      await tester.pumpAndSettle();
+
+      expect(store.hideAmounts, isTrue);
+      expect(find.text('••••••'), findsWidgets);
+      // The per-account chips have to go too — leaving them is leaving the
+      // balance on screen in three pieces.
+      expect(find.textContaining('₹85,000'), findsNothing);
+      expect(find.text('Cash  $maskedAmount'), findsOneWidget);
+    });
+
+    testWidgets('it is one tap back', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Hide amounts'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show amounts'));
+      await tester.pumpAndSettle();
+
+      expect(store.hideAmounts, isFalse);
+      expect(find.text('••••••'), findsNothing);
+    });
+
+    testWidgets('the mask does not leak how big the number is',
+        (tester) async {
+      phone(tester);
+      final small = await emptyStore();
+      await tester.pumpWidget(home(small));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Hide amounts'));
+      await tester.pumpAndSettle();
+      final masked = tester.widget<Text>(find.text('••••••').first).data;
+
+      // A mask sized to the digits would give away the order of magnitude,
+      // which is most of what was being hidden.
+      expect(masked, '••••••');
+    });
+  });
+
+  testWidgets('hiding survives a relaunch', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    await tester.pumpWidget(home(store));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Hide amounts'));
+    await tester.pumpAndSettle();
+
+    final next = PennyStore();
+    await next.load();
+    expect(next.hideAmounts, isTrue,
+        reason: 'having to hide it again every launch is why people stop');
   });
 }

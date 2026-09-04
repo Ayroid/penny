@@ -16,6 +16,8 @@ with the daily, weekly and monthly picture. Everything stays on the phone.
   next open the app.
 - **Day / week / month** everywhere, with a spend heatmap and a category
   breakdown.
+- **Hide the numbers.** One tap masks every amount on the overview, and it
+  stays masked until you tap it back.
 - **Local, quiet, no account.** No sign-in, no sync, no analytics. Your backup is
   a JSON file you export and keep.
 

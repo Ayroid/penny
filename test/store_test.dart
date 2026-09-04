@@ -477,4 +477,37 @@ void main() {
       expect(s.shortcuts.map((x) => x.id), ['s1']);
     });
   });
+
+  group('renaming seeded defaults', () {
+    test('an untouched Card account becomes Wallet', () async {
+      final s = await loaded();
+      s.importJson('''
+        {"accounts":[{"id":"a1","name":"Card","icon":"credit-card","opening":0}],
+         "categories":[],"txns":[]}
+      ''');
+      expect(s.accounts.single.name, 'Wallet');
+      expect(s.accounts.single.icon, 'wallet');
+    });
+
+    test('an account the person renamed is left alone', () async {
+      final s = await loaded();
+      s.importJson('''
+        {"accounts":[{"id":"a1","name":"HDFC Card","icon":"credit-card","opening":0}],
+         "categories":[],"txns":[]}
+      ''');
+      expect(s.accounts.single.name, 'HDFC Card');
+    });
+
+    test('an account whose icon was changed is left alone', () async {
+      // Changing the icon is a decision too, and overwriting it would be
+      // undoing something the person did on purpose.
+      final s = await loaded();
+      s.importJson('''
+        {"accounts":[{"id":"a1","name":"Card","icon":"gem","opening":0}],
+         "categories":[],"txns":[]}
+      ''');
+      expect(s.accounts.single.name, 'Card');
+      expect(s.accounts.single.icon, 'gem');
+    });
+  });
 }

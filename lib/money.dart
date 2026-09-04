@@ -51,8 +51,8 @@ String rupees(int minor, {bool signed = false}) {
   final sign = negative
       ? '-'
       : signed
-          ? '+'
-          : '';
+      ? '+'
+      : '';
   final paise = (abs % 100).toString().padLeft(2, '0');
   return '$sign$rupee${groupIndian('${abs ~/ 100}')}.$paise';
 }
@@ -65,8 +65,8 @@ String rupeesWhole(int minor, {bool signed = false}) {
   final sign = negative
       ? '-'
       : signed
-          ? '+'
-          : '';
+      ? '+'
+      : '';
   return '$sign$rupee${groupIndian('${abs ~/ 100}')}';
 }
 
@@ -114,9 +114,7 @@ String amountFieldText(int minor) {
   if (minor == 0) return '';
   final paise = minor % 100;
   final whole = minor ~/ 100;
-  return paise == 0
-      ? '$whole'
-      : '$whole.${paise.toString().padLeft(2, '0')}';
+  return paise == 0 ? '$whole' : '$whole.${paise.toString().padLeft(2, '0')}';
 }
 
 /// Digits, one decimal point, at most two places after it.
@@ -127,6 +125,13 @@ String amountFieldText(int minor) {
 final amountInputFormatter = TextInputFormatter.withFunction(
   (oldValue, newValue) =>
       RegExp(r'^\d{0,9}(\.\d{0,2})?$').hasMatch(newValue.text)
-          ? newValue
-          : oldValue,
+      ? newValue
+      : oldValue,
 );
+
+/// What an amount looks like when the balance is hidden.
+///
+/// A fixed width rather than one dot per digit: the length of the mask would
+/// otherwise leak the size of the number, which is most of what someone was
+/// hiding.
+const maskedAmount = '••••••';

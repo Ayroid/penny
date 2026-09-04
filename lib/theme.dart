@@ -86,10 +86,18 @@ Color coinSoftOf(BuildContext c) => isDark(c) ? coinSoftDark : coinSoft;
 /// that genuinely float.
 List<BoxShadow> cardShadow(bool dark) => dark
     ? const [
-        BoxShadow(color: Color(0x40000000), blurRadius: 14, offset: Offset(0, 3)),
+        BoxShadow(
+          color: Color(0x40000000),
+          blurRadius: 14,
+          offset: Offset(0, 3),
+        ),
       ]
     : const [
-        BoxShadow(color: Color(0x1216295C), blurRadius: 16, offset: Offset(0, 3)),
+        BoxShadow(
+          color: Color(0x1216295C),
+          blurRadius: 16,
+          offset: Offset(0, 3),
+        ),
       ];
 
 ThemeData appTheme({required bool dark}) {
@@ -106,14 +114,18 @@ ThemeData appTheme({required bool dark}) {
   // Wick could hardcode white because its flame is darker; this palette cannot.
   const onAccentConst = navy;
 
-  TextStyle t(double size, FontWeight w, {Color? color, double spacing = -0.2}) =>
-      TextStyle(
-        fontFamily: fontFamily,
-        fontSize: size,
-        fontWeight: w,
-        color: color ?? fg,
-        letterSpacing: spacing,
-      );
+  TextStyle t(
+    double size,
+    FontWeight w, {
+    Color? color,
+    double spacing = -0.2,
+  }) => TextStyle(
+    fontFamily: fontFamily,
+    fontSize: size,
+    fontWeight: w,
+    color: color ?? fg,
+    letterSpacing: spacing,
+  );
 
   return ThemeData(
     useMaterial3: true,
@@ -155,7 +167,9 @@ ThemeData appTheme({required bool dark}) {
       elevation: 0,
       margin: EdgeInsets.zero,
       color: card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       isDense: true,
@@ -211,13 +225,6 @@ ThemeData appTheme({required bool dark}) {
       titleTextStyle: t(18, FontWeight.w700),
       contentTextStyle: t(14, FontWeight.w400, color: muted),
     ),
-    snackBarTheme: SnackBarThemeData(
-      backgroundColor: dark ? darkCard : navy,
-      contentTextStyle: t(14, FontWeight.w600, color: Colors.white),
-      actionTextColor: dark ? coinDark : coinSoft,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: dark ? darkSunk : navy,
@@ -246,22 +253,49 @@ OutlineInputBorder _softBorder(Color color, {double width = 1}) =>
     );
 
 const months = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 const monthShort = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 const weekdays = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
 ];
 const weekdayShort = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 String longDate(DateTime d) =>
     '${weekdays[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
 
-String shortDate(DateTime d) => '${monthShort[d.month - 1]} ${d.day}, ${d.year}';
+String shortDate(DateTime d) =>
+    '${monthShort[d.month - 1]} ${d.day}, ${d.year}';
 
 /// `1 account` / `3 accounts`. [many] for words that do not just take an s.
 String plural(int n, String one, [String? many]) =>
@@ -412,7 +446,8 @@ Color onAccent(BuildContext c) {
 
 /// The current accent at [alpha]. Everything below builds on it, so wrapping a
 /// subtree in [CategoryAccent] recolours all of it at once.
-Color tint(BuildContext c, double alpha) => accentOf(c).withValues(alpha: alpha);
+Color tint(BuildContext c, double alpha) =>
+    accentOf(c).withValues(alpha: alpha);
 
 /// Card ground. Barely there in light, where a wash on cream goes muddy fast.
 Color cardTint(BuildContext c) => tint(c, isDark(c) ? 0.07 : 0.035);
@@ -450,14 +485,13 @@ TextStyle mono(
   required Color color,
   FontWeight weight = FontWeight.w500,
   double spacing = 0.4,
-}) =>
-    TextStyle(
-      fontFamily: monoFamily,
-      fontSize: size,
-      fontWeight: weight,
-      color: color,
-      letterSpacing: spacing,
-    );
+}) => TextStyle(
+  fontFamily: monoFamily,
+  fontSize: size,
+  fontWeight: weight,
+  color: color,
+  letterSpacing: spacing,
+);
 
 /// A round icon button in a soft well — the only chrome shape used for
 /// navigation.
@@ -550,9 +584,12 @@ class TintCard extends StatelessWidget {
       decoration: BoxDecoration(
         // Over the *page* ground, not the raised surface colour: starting a
         // step lighter would undo the tint that does the separating.
-        color: color ??
+        color:
+            color ??
             Color.alphaBlend(
-                cardTint(context), Theme.of(context).scaffoldBackgroundColor),
+              cardTint(context),
+              Theme.of(context).scaffoldBackgroundColor,
+            ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: cardEdge(context)),
       ),
@@ -675,7 +712,11 @@ class TintChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: dim ? scheme.secondary : accentOf(context)),
+          Icon(
+            icon,
+            size: 13,
+            color: dim ? scheme.secondary : accentOf(context),
+          ),
           const SizedBox(width: 5),
           Text(
             label,

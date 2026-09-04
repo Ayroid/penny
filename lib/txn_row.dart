@@ -17,6 +17,7 @@ class TxnRow extends StatelessWidget {
     required this.txn,
     this.onTap,
     this.showBalance,
+    this.hideAmount = false,
   });
 
   final PennyStore store;
@@ -25,6 +26,10 @@ class TxnRow extends StatelessWidget {
 
   /// Running balance after this row, for the ledger. Absent on the overview.
   final int? showBalance;
+
+  /// Mask the figures. Set on the overview, which is the screen glanced at in
+  /// public; the ledger is somewhere you go on purpose.
+  final bool hideAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -50,11 +55,13 @@ class TxnRow extends StatelessWidget {
 
     // Signed by kind, never by a negative amount in storage. A transfer takes
     // no sign at all — nothing was earned or spent.
-    final amount = switch (txn.kind) {
-      TxKind.income => rupees(txn.amountMinor, signed: true),
-      TxKind.expense => '-${rupees(txn.amountMinor)}',
-      TxKind.transfer => rupees(txn.amountMinor),
-    };
+    final amount = hideAmount
+        ? maskedAmount
+        : switch (txn.kind) {
+            TxKind.income => rupees(txn.amountMinor, signed: true),
+            TxKind.expense => '-${rupees(txn.amountMinor)}',
+            TxKind.transfer => rupees(txn.amountMinor),
+          };
 
     return Semantics(
       button: onTap != null,
@@ -72,7 +79,9 @@ class TxnRow extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: colour.withValues(alpha: isDark(context) ? 0.15 : 0.12),
+                  color: colour.withValues(
+                    alpha: isDark(context) ? 0.15 : 0.12,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -89,15 +98,19 @@ class TxnRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title,
-                        style: text.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      title,
+                      style: text.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     if (subtitle.isNotEmpty)
-                      Text(subtitle,
-                          style: text.bodySmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        subtitle,
+                        style: text.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                   ],
                 ),
               ),
@@ -120,8 +133,10 @@ class TxnRow extends StatelessWidget {
                     ),
                   ),
                   if (showBalance != null)
-                    Text(rupeesWhole(showBalance!),
-                        style: mono(11, color: scheme.secondary)),
+                    Text(
+                      hideAmount ? maskedAmount : rupeesWhole(showBalance!),
+                      style: mono(11, color: scheme.secondary),
+                    ),
                 ],
               ),
             ],

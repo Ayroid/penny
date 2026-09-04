@@ -61,8 +61,11 @@ class PennyImage extends StatelessWidget {
           // Nothing left to fall back to — draw the mark instead of leaving a
           // gap. This is also what runs before the art has been dropped in.
           ? CoinMark(size: size, semanticLabel: semanticLabel)
-          : PennyImage(pose.fallback!,
-              size: size, semanticLabel: semanticLabel),
+          : PennyImage(
+              pose.fallback!,
+              size: size,
+              semanticLabel: semanticLabel,
+            ),
     );
   }
 }
@@ -135,9 +138,17 @@ class _CoinPainter extends CustomPainter {
       final leaf = Path()
         ..moveTo(base.dx, base.dy)
         ..quadraticBezierTo(
-            base.dx + dir * s * 0.04, tip.dy - s * 0.05, tip.dx, tip.dy)
+          base.dx + dir * s * 0.04,
+          tip.dy - s * 0.05,
+          tip.dx,
+          tip.dy,
+        )
         ..quadraticBezierTo(
-            tip.dx - dir * s * 0.02, base.dy - s * 0.01, base.dx, base.dy)
+          tip.dx - dir * s * 0.02,
+          base.dy - s * 0.01,
+          base.dx,
+          base.dy,
+        )
         ..close();
       canvas.drawPath(leaf, Paint()..color = left ? _leafShade : _leaf);
       canvas.drawPath(leaf, outline);
@@ -181,7 +192,10 @@ class _CoinPainter extends CustomPainter {
 
     // A closed smile, never a frown.
     canvas.drawArc(
-      Rect.fromCircle(center: Offset(centre.dx, centre.dy + r * 0.12), radius: r * 0.24),
+      Rect.fromCircle(
+        center: Offset(centre.dx, centre.dy + r * 0.12),
+        radius: r * 0.24,
+      ),
       math.pi * 0.15,
       math.pi * 0.7,
       false,
@@ -269,15 +283,17 @@ Future<void> showPennyMoment(
             Text(
               headline,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineLarge
-                  ?.copyWith(fontSize: 24, color: sproutOf(context)),
+              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                fontSize: 24,
+                color: sproutOf(context),
+              ),
             ),
             const SizedBox(height: 8),
-            Text(body,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),

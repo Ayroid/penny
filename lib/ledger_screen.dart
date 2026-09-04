@@ -36,10 +36,10 @@ class _LedgerPageState extends State<LedgerPage> {
   /// What one row does to the total across all accounts. A transfer nets to
   /// zero — it moves money without changing how much there is.
   int _effect(Txn t) => switch (t.kind) {
-        TxKind.income => t.amountMinor,
-        TxKind.expense => -t.amountMinor,
-        TxKind.transfer => 0,
-      };
+    TxKind.income => t.amountMinor,
+    TxKind.expense => -t.amountMinor,
+    TxKind.transfer => 0,
+  };
 
   bool _matches(Txn t) {
     if (_kind != null && t.kind != _kind) return false;
@@ -68,7 +68,10 @@ class _LedgerPageState extends State<LedgerPage> {
       running -= _effect(t);
     }
 
-    final rows = [for (final t in all) if (_matches(t)) t];
+    final rows = [
+      for (final t in all)
+        if (_matches(t)) t,
+    ];
 
     // Flatten into day headers followed by their rows, so one ListView can
     // build the whole thing lazily.
@@ -119,8 +122,7 @@ class _LedgerPageState extends State<LedgerPage> {
                           : IconButton(
                               icon: const Icon(LucideIcons.x, size: 16),
                               tooltip: 'Clear search',
-                              onPressed: () =>
-                                  setState(() => _search.clear()),
+                              onPressed: () => setState(() => _search.clear()),
                             ),
                     ),
                   ),
@@ -144,8 +146,9 @@ class _LedgerPageState extends State<LedgerPage> {
               child: items.isEmpty
                   ? PennyMessage(
                       pose: all.isEmpty ? Penny.standing : Penny.thinking,
-                      headline:
-                          all.isEmpty ? 'Nothing tracked yet' : 'No matches',
+                      headline: all.isEmpty
+                          ? 'Nothing tracked yet'
+                          : 'No matches',
                       body: all.isEmpty
                           ? 'Every transaction you add lands here.'
                           : 'Nothing in the ledger fits that.',
@@ -163,18 +166,28 @@ class _LedgerPageState extends State<LedgerPage> {
                         if (item.txn == null) {
                           return Padding(
                             padding: EdgeInsets.only(
-                                left: 8, right: 8, top: i == 0 ? 4 : 18, bottom: 4),
+                              left: 8,
+                              right: 8,
+                              top: i == 0 ? 4 : 18,
+                              bottom: 4,
+                            ),
                             child: Row(
                               children: [
-                                Text(_dayHeader(item.header!),
-                                    style: text.labelSmall),
+                                Text(
+                                  _dayHeader(item.header!),
+                                  style: text.labelSmall,
+                                ),
                                 const Spacer(),
-                                Text(rupeesWhole(item.net, signed: true),
-                                    style: mono(11,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .secondary,
-                                        weight: FontWeight.w700)),
+                                Text(
+                                  rupeesWhole(item.net, signed: true),
+                                  style: mono(
+                                    11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondary,
+                                    weight: FontWeight.w700,
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -183,8 +196,11 @@ class _LedgerPageState extends State<LedgerPage> {
                           store: store,
                           txn: item.txn!,
                           showBalance: balances[item.txn!.id],
-                          onTap: () => showEntrySheet(context, store,
-                              existing: item.txn),
+                          onTap: () => showEntrySheet(
+                            context,
+                            store,
+                            existing: item.txn,
+                          ),
                         );
                       },
                     ),

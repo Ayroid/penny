@@ -50,16 +50,18 @@ List<Txn> dueOccurrences(Rule rule, DateTime now) {
       continue;
     }
 
-    out.add(Txn(
-      kind: rule.kind,
-      amountMinor: rule.amountMinor,
-      day: day,
-      categoryId: rule.categoryId,
-      accountId: rule.accountId,
-      toAccountId: rule.kind == TxKind.transfer ? rule.toAccountId : null,
-      note: rule.note,
-      ruleId: rule.id,
-    ));
+    out.add(
+      Txn(
+        kind: rule.kind,
+        amountMinor: rule.amountMinor,
+        day: day,
+        categoryId: rule.categoryId,
+        accountId: rule.accountId,
+        toAccountId: rule.kind == TxKind.transfer ? rule.toAccountId : null,
+        note: rule.note,
+        ruleId: rule.id,
+      ),
+    );
 
     if (out.length >= maxPerPass) break;
   }

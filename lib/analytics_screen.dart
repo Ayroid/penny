@@ -28,11 +28,20 @@ class _InsightsPageState extends State<InsightsPage> {
     final store = widget.store;
     final text = Theme.of(context).textTheme;
     final anchor = today();
-    final buckets = series(store.txns, _period, anchor, _period == Period.day ? 14 : 6);
+    final buckets = series(
+      store.txns,
+      _period,
+      anchor,
+      _period == Period.day ? 14 : 6,
+    );
     final range = rangeFor(_period, anchor);
     final spend = byCategory(store.txns, range, TxKind.expense);
-    final change =
-        changeVsPrevious(store.txns, _period, anchor, kind: TxKind.expense);
+    final change = changeVsPrevious(
+      store.txns,
+      _period,
+      anchor,
+      kind: TxKind.expense,
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -45,7 +54,8 @@ class _InsightsPageState extends State<InsightsPage> {
                   ? const PennyMessage(
                       pose: Penny.thinking,
                       headline: 'Nothing to read yet',
-                      body: 'Add a few transactions and the patterns show up here.',
+                      body:
+                          'Add a few transactions and the patterns show up here.',
                       size: 120,
                     )
                   : ListView(
@@ -66,15 +76,18 @@ class _InsightsPageState extends State<InsightsPage> {
                         Padding(
                           padding: const EdgeInsets.only(left: 8, bottom: 6),
                           child: Text(
-                              'SPENT THIS ${_period.label.toUpperCase()}',
-                              style: text.labelSmall),
+                            'SPENT THIS ${_period.label.toUpperCase()}',
+                            style: text.labelSmall,
+                          ),
                         ),
                         if (spend.isEmpty)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 24),
                             child: Center(
-                              child: Text('Nothing spent yet',
-                                  style: text.bodySmall),
+                              child: Text(
+                                'Nothing spent yet',
+                                style: text.bodySmall,
+                              ),
                             ),
                           )
                         else
@@ -99,7 +112,9 @@ class _TrendCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final peak = buckets.fold<int>(
-        1, (m, b) => [m, b.income, b.expense].reduce((x, y) => x > y ? x : y));
+      1,
+      (m, b) => [m, b.income, b.expense].reduce((x, y) => x > y ? x : y),
+    );
 
     return TintCard(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
@@ -108,8 +123,10 @@ class _TrendCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('CREDIT AND DEBIT',
-                  style: Theme.of(context).textTheme.labelSmall),
+              Text(
+                'CREDIT AND DEBIT',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
               const Spacer(),
               // A key, because green and orange are the classic confusion
               // pair — the words carry the meaning, the fills only echo it.
@@ -139,18 +156,22 @@ class _TrendCard extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _Bar(
-                                    fraction: b.income / peak,
-                                    colour: sproutOf(context)),
+                                  fraction: b.income / peak,
+                                  colour: sproutOf(context),
+                                ),
                                 const SizedBox(width: 3),
                                 _Bar(
-                                    fraction: b.expense / peak,
-                                    colour: coinOf(context)),
+                                  fraction: b.expense / peak,
+                                  colour: coinOf(context),
+                                ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(b.label,
-                              style: mono(10, color: gridLabel(context))),
+                          Text(
+                            b.label,
+                            style: mono(10, color: gridLabel(context)),
+                          ),
                         ],
                       ),
                     ),
@@ -211,8 +232,10 @@ class _Key extends StatelessWidget {
           decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
-        Text(label,
-            style: mono(11, color: Theme.of(context).colorScheme.secondary)),
+        Text(
+          label,
+          style: mono(11, color: Theme.of(context).colorScheme.secondary),
+        ),
       ],
     );
   }
@@ -237,10 +260,11 @@ class _ChangeCard extends StatelessWidget {
     final (icon, phrase) = change == 0
         ? (LucideIcons.equal, 'Spending is level with $previous')
         : change > 0
-            ? (LucideIcons.trendingUp,
-                '${rupeesWhole(change)} more than $previous')
-            : (LucideIcons.trendingDown,
-                '${rupeesWhole(-change)} less than $previous');
+        ? (LucideIcons.trendingUp, '${rupeesWhole(change)} more than $previous')
+        : (
+            LucideIcons.trendingDown,
+            '${rupeesWhole(-change)} less than $previous',
+          );
 
     return TintCard(
       child: Row(
@@ -250,8 +274,8 @@ class _ChangeCard extends StatelessWidget {
           Icon(icon, size: 18, color: scheme.secondary),
           const SizedBox(width: 10),
           Expanded(
-              child: Text(phrase,
-                  style: Theme.of(context).textTheme.bodyMedium)),
+            child: Text(phrase, style: Theme.of(context).textTheme.bodyMedium),
+          ),
         ],
       ),
     );
@@ -276,64 +300,81 @@ class _Breakdown extends StatelessWidget {
       child: Column(
         children: [
           for (final e in spend.entries)
-            Builder(builder: (context) {
-              final c = store.categoryById(e.key);
-              final colour = catColorAt(c?.color ?? defaultCatColor);
-              final share = total == 0 ? 0 : (e.value * 100 / total).round();
+            Builder(
+              builder: (context) {
+                final c = store.categoryById(e.key);
+                final colour = catColorAt(c?.color ?? defaultCatColor);
+                final share = total == 0 ? 0 : (e.value * 100 / total).round();
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Semantics(
-                  label:
-                      '${c?.name ?? 'Uncategorised'}, ${rupees(e.value)}, $share percent',
-                  excludeSemantics: true,
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Icon(iconFor(c?.icon ?? defaultIcon),
-                              size: 15, color: colour),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(c?.name ?? 'Uncategorised',
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Semantics(
+                    label:
+                        '${c?.name ?? 'Uncategorised'}, ${rupees(e.value)}, $share percent',
+                    excludeSemantics: true,
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              iconFor(c?.icon ?? defaultIcon),
+                              size: 15,
+                              color: colour,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                c?.name ?? 'Uncategorised',
                                 style: Theme.of(context).textTheme.titleMedium,
                                 maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          Text('$share%',
-                              style: mono(11, color: scheme.secondary)),
-                          const SizedBox(width: 10),
-                          Text(rupees(e.value),
-                              style: mono(13,
-                                  color: scheme.onSurface,
-                                  weight: FontWeight.w700)),
-                        ],
-                      ),
-                      const SizedBox(height: 5),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(pill),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: (e.value / peak * 1000).round().clamp(1, 1000),
-                              child: Container(height: 6, color: colour),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            Expanded(
-                              flex: (1000 - e.value / peak * 1000)
-                                  .round()
-                                  .clamp(0, 999),
-                              child: Container(
-                                  height: 6,
-                                  color: scheme.surfaceContainerHighest),
+                            Text(
+                              '$share%',
+                              style: mono(11, color: scheme.secondary),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              rupees(e.value),
+                              style: mono(
+                                13,
+                                color: scheme.onSurface,
+                                weight: FontWeight.w700,
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 5),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(pill),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: (e.value / peak * 1000).round().clamp(
+                                  1,
+                                  1000,
+                                ),
+                                child: Container(height: 6, color: colour),
+                              ),
+                              Expanded(
+                                flex: (1000 - e.value / peak * 1000)
+                                    .round()
+                                    .clamp(0, 999),
+                                child: Container(
+                                  height: 6,
+                                  color: scheme.surfaceContainerHighest,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              },
+            ),
         ],
       ),
     );

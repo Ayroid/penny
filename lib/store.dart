@@ -12,6 +12,7 @@ const _ledgerKey = 'ledger';
 const _themeKey = 'themeMode';
 const _onboardedKey = 'onboarded';
 const _momentsKey = 'moments';
+const _hideAmountsKey = 'hideAmounts';
 
 /// Calendar-day key, e.g. "2026-09-04". A transaction happens on a *day*, not
 /// at an instant, so days are stored as strings — no DateTime equality or
@@ -75,8 +76,10 @@ enum TxKind {
   expense,
   transfer;
 
-  static TxKind parse(String? s) =>
-      TxKind.values.firstWhere((k) => k.name == s, orElse: () => TxKind.expense);
+  static TxKind parse(String? s) => TxKind.values.firstWhere(
+    (k) => k.name == s,
+    orElse: () => TxKind.expense,
+  );
 }
 
 class Txn {
@@ -91,8 +94,8 @@ class Txn {
     this.note = '',
     this.ruleId,
     String? createdAt,
-  })  : id = id ?? newId(),
-        createdAt = createdAt ?? DateTime.now().toIso8601String();
+  }) : id = id ?? newId(),
+       createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   final String id;
 
@@ -125,32 +128,32 @@ class Txn {
   String? ruleId;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': kind.name,
-        'amount': amountMinor,
-        'day': day,
-        'category': categoryId,
-        'account': accountId,
-        if (toAccountId != null) 'toAccount': toAccountId,
-        if (note.isNotEmpty) 'note': note,
-        if (ruleId != null) 'rule': ruleId,
-        'createdAt': createdAt,
-      };
+    'id': id,
+    'kind': kind.name,
+    'amount': amountMinor,
+    'day': day,
+    'category': categoryId,
+    'account': accountId,
+    if (toAccountId != null) 'toAccount': toAccountId,
+    if (note.isNotEmpty) 'note': note,
+    if (ruleId != null) 'rule': ruleId,
+    'createdAt': createdAt,
+  };
 
   factory Txn.fromJson(Map<String, dynamic> j) => Txn(
-        id: j['id'] as String?,
-        kind: TxKind.parse(j['kind'] as String?),
-        // Clamped, not trusted: this is a hand-editable export, and a negative
-        // or absurd amount must not be able to invert a balance.
-        amountMinor: ((j['amount'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
-        day: j['day'] as String? ?? dayKey(today()),
-        categoryId: j['category'] as String? ?? '',
-        accountId: j['account'] as String? ?? '',
-        toAccountId: j['toAccount'] as String?,
-        note: j['note'] as String? ?? '',
-        ruleId: j['rule'] as String?,
-        createdAt: j['createdAt'] as String?,
-      );
+    id: j['id'] as String?,
+    kind: TxKind.parse(j['kind'] as String?),
+    // Clamped, not trusted: this is a hand-editable export, and a negative
+    // or absurd amount must not be able to invert a balance.
+    amountMinor: ((j['amount'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
+    day: j['day'] as String? ?? dayKey(today()),
+    categoryId: j['category'] as String? ?? '',
+    accountId: j['account'] as String? ?? '',
+    toAccountId: j['toAccount'] as String?,
+    note: j['note'] as String? ?? '',
+    ruleId: j['rule'] as String?,
+    createdAt: j['createdAt'] as String?,
+  );
 }
 
 class Category {
@@ -177,22 +180,22 @@ class Category {
   bool archived;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'kind': kind.name,
-        'icon': icon,
-        'color': color,
-        if (archived) 'archived': true,
-      };
+    'id': id,
+    'name': name,
+    'kind': kind.name,
+    'icon': icon,
+    'color': color,
+    if (archived) 'archived': true,
+  };
 
   factory Category.fromJson(Map<String, dynamic> j) => Category(
-        id: j['id'] as String?,
-        name: j['name'] as String? ?? 'Untitled',
-        kind: TxKind.parse(j['kind'] as String?),
-        icon: j['icon'] as String? ?? defaultIcon,
-        color: (j['color'] as num?)?.toInt() ?? defaultCatColor,
-        archived: j['archived'] as bool? ?? false,
-      );
+    id: j['id'] as String?,
+    name: j['name'] as String? ?? 'Untitled',
+    kind: TxKind.parse(j['kind'] as String?),
+    icon: j['icon'] as String? ?? defaultIcon,
+    color: (j['color'] as num?)?.toInt() ?? defaultCatColor,
+    archived: j['archived'] as bool? ?? false,
+  );
 }
 
 class Account {
@@ -216,22 +219,22 @@ class Account {
   bool archived;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'icon': icon,
-        'color': color,
-        'opening': openingBalanceMinor,
-        if (archived) 'archived': true,
-      };
+    'id': id,
+    'name': name,
+    'icon': icon,
+    'color': color,
+    'opening': openingBalanceMinor,
+    if (archived) 'archived': true,
+  };
 
   factory Account.fromJson(Map<String, dynamic> j) => Account(
-        id: j['id'] as String?,
-        name: j['name'] as String? ?? 'Account',
-        icon: j['icon'] as String? ?? 'wallet',
-        color: (j['color'] as num?)?.toInt() ?? defaultCatColor,
-        openingBalanceMinor: (j['opening'] as num?)?.toInt() ?? 0,
-        archived: j['archived'] as bool? ?? false,
-      );
+    id: j['id'] as String?,
+    name: j['name'] as String? ?? 'Account',
+    icon: j['icon'] as String? ?? 'wallet',
+    color: (j['color'] as num?)?.toInt() ?? defaultCatColor,
+    openingBalanceMinor: (j['opening'] as num?)?.toInt() ?? 0,
+    archived: j['archived'] as bool? ?? false,
+  );
 }
 
 enum Freq {
@@ -287,38 +290,38 @@ class Rule {
   bool active;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': kind.name,
-        'amount': amountMinor,
-        'category': categoryId,
-        'account': accountId,
-        if (toAccountId != null) 'toAccount': toAccountId,
-        if (note.isNotEmpty) 'note': note,
-        'freq': freq.name,
-        'interval': interval,
-        'startDay': startDay,
-        if (endDay != null) 'endDay': endDay,
-        if (lastRunDay != null) 'lastRunDay': lastRunDay,
-        if (!active) 'active': false,
-      };
+    'id': id,
+    'kind': kind.name,
+    'amount': amountMinor,
+    'category': categoryId,
+    'account': accountId,
+    if (toAccountId != null) 'toAccount': toAccountId,
+    if (note.isNotEmpty) 'note': note,
+    'freq': freq.name,
+    'interval': interval,
+    'startDay': startDay,
+    if (endDay != null) 'endDay': endDay,
+    if (lastRunDay != null) 'lastRunDay': lastRunDay,
+    if (!active) 'active': false,
+  };
 
   factory Rule.fromJson(Map<String, dynamic> j) => Rule(
-        id: j['id'] as String?,
-        kind: TxKind.parse(j['kind'] as String?),
-        amountMinor: ((j['amount'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
-        categoryId: j['category'] as String? ?? '',
-        accountId: j['account'] as String? ?? '',
-        toAccountId: j['toAccount'] as String?,
-        note: j['note'] as String? ?? '',
-        freq: Freq.parse(j['freq'] as String?),
-        // Clamped: a zero or negative interval is an infinite loop in
-        // `dueOccurrences`, and this file is hand-editable.
-        interval: ((j['interval'] as num?)?.toInt() ?? 1).clamp(1, 366),
-        startDay: j['startDay'] as String? ?? dayKey(today()),
-        endDay: j['endDay'] as String?,
-        lastRunDay: j['lastRunDay'] as String?,
-        active: j['active'] as bool? ?? true,
-      );
+    id: j['id'] as String?,
+    kind: TxKind.parse(j['kind'] as String?),
+    amountMinor: ((j['amount'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
+    categoryId: j['category'] as String? ?? '',
+    accountId: j['account'] as String? ?? '',
+    toAccountId: j['toAccount'] as String?,
+    note: j['note'] as String? ?? '',
+    freq: Freq.parse(j['freq'] as String?),
+    // Clamped: a zero or negative interval is an infinite loop in
+    // `dueOccurrences`, and this file is hand-editable.
+    interval: ((j['interval'] as num?)?.toInt() ?? 1).clamp(1, 366),
+    startDay: j['startDay'] as String? ?? dayKey(today()),
+    endDay: j['endDay'] as String?,
+    lastRunDay: j['lastRunDay'] as String?,
+    active: j['active'] as bool? ?? true,
+  );
 }
 
 /// A transaction the person has chosen to keep one tap away.
@@ -359,46 +362,45 @@ class Shortcut {
 
   /// This shortcut as a transaction, dated today.
   Txn toTxn() => Txn(
-        kind: kind,
-        amountMinor: amountMinor,
-        day: dayKey(today()),
-        categoryId: categoryId,
-        accountId: accountId,
-        toAccountId: kind == TxKind.transfer ? toAccountId : null,
-        note: note,
-      );
+    kind: kind,
+    amountMinor: amountMinor,
+    day: dayKey(today()),
+    categoryId: categoryId,
+    accountId: accountId,
+    toAccountId: kind == TxKind.transfer ? toAccountId : null,
+    note: note,
+  );
 
   /// The shortcut [txn] would become if it were pinned.
   factory Shortcut.of(Txn txn) => Shortcut(
-        kind: txn.kind,
-        amountMinor: txn.amountMinor,
-        categoryId: txn.categoryId,
-        accountId: txn.accountId,
-        toAccountId: txn.toAccountId,
-        note: txn.note,
-      );
+    kind: txn.kind,
+    amountMinor: txn.amountMinor,
+    categoryId: txn.categoryId,
+    accountId: txn.accountId,
+    toAccountId: txn.toAccountId,
+    note: txn.note,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': kind.name,
-        'amount': amountMinor,
-        'category': categoryId,
-        'account': accountId,
-        if (toAccountId != null) 'toAccount': toAccountId,
-        if (note.isNotEmpty) 'note': note,
-      };
+    'id': id,
+    'kind': kind.name,
+    'amount': amountMinor,
+    'category': categoryId,
+    'account': accountId,
+    if (toAccountId != null) 'toAccount': toAccountId,
+    if (note.isNotEmpty) 'note': note,
+  };
 
   factory Shortcut.fromJson(Map<String, dynamic> j) => Shortcut(
-        id: j['id'] as String?,
-        kind: TxKind.parse(j['kind'] as String?),
-        amountMinor: ((j['amount'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
-        categoryId: j['category'] as String? ?? '',
-        accountId: j['account'] as String? ?? '',
-        toAccountId: j['toAccount'] as String?,
-        note: j['note'] as String? ?? '',
-      );
+    id: j['id'] as String?,
+    kind: TxKind.parse(j['kind'] as String?),
+    amountMinor: ((j['amount'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
+    categoryId: j['category'] as String? ?? '',
+    accountId: j['account'] as String? ?? '',
+    toAccountId: j['toAccount'] as String?,
+    note: j['note'] as String? ?? '',
+  );
 }
-
 
 // ── The store ───────────────────────────────────────────────────────────────
 
@@ -415,6 +417,12 @@ class PennyStore extends ChangeNotifier {
   final List<Shortcut> shortcuts = [];
 
   ThemeMode themeMode = ThemeMode.light;
+
+  /// Whether the balance is masked on the overview. Persisted, because the
+  /// reason to hide it — a shared desk, a train, handing someone the phone —
+  /// outlasts one launch, and having to hide it again every time is why people
+  /// stop bothering.
+  bool hideAmounts = false;
   bool onboarded = false;
   bool loaded = false;
 
@@ -426,15 +434,17 @@ class PennyStore extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    themeMode = ThemeMode.values[
-        (prefs.getInt(_themeKey) ?? ThemeMode.light.index).clamp(0, 2)];
+    themeMode = ThemeMode
+        .values[(prefs.getInt(_themeKey) ?? ThemeMode.light.index).clamp(0, 2)];
     onboarded = prefs.getBool(_onboardedKey) ?? false;
+    hideAmounts = prefs.getBool(_hideAmountsKey) ?? false;
 
     final rawMoments = prefs.getString(_momentsKey);
     if (rawMoments != null) {
       try {
         (jsonDecode(rawMoments) as Map).forEach(
-            (k, v) => _moments[k as String] = v as String);
+          (k, v) => _moments[k as String] = v as String,
+        );
       } catch (_) {
         // A corrupt moments map costs a repeated celebration, nothing more.
       }
@@ -466,13 +476,13 @@ class PennyStore extends ChangeNotifier {
     List<Txn> txns,
     List<Rule> rules,
     List<Shortcut> shortcuts,
-  }) _decode(String raw) {
+  })
+  _decode(String raw) {
     final doc = jsonDecode(raw) as Map<String, dynamic>;
-    List<T> read<T>(String key, T Function(Map<String, dynamic>) from) =>
-        [
-          for (final e in (doc[key] as List? ?? const []))
-            from(e as Map<String, dynamic>)
-        ];
+    List<T> read<T>(String key, T Function(Map<String, dynamic>) from) => [
+      for (final e in (doc[key] as List? ?? const []))
+        from(e as Map<String, dynamic>),
+    ];
 
     return (
       accounts: read('accounts', Account.fromJson),
@@ -484,13 +494,15 @@ class PennyStore extends ChangeNotifier {
   }
 
   void _adopt(
-      ({
-        List<Account> accounts,
-        List<Category> categories,
-        List<Txn> txns,
-        List<Rule> rules,
-        List<Shortcut> shortcuts,
-      }) doc) {
+    ({
+      List<Account> accounts,
+      List<Category> categories,
+      List<Txn> txns,
+      List<Rule> rules,
+      List<Shortcut> shortcuts,
+    })
+    doc,
+  ) {
     accounts
       ..clear()
       ..addAll(doc.accounts);
@@ -507,7 +519,27 @@ class PennyStore extends ChangeNotifier {
       ..clear()
       ..addAll(doc.shortcuts);
     _repair();
+    _renameUntouchedDefaults();
     _sort();
+  }
+
+  /// One-time renames of seeded defaults nobody has touched.
+  ///
+  /// Changing `seedDefaults` only changes what a *new* ledger starts with —
+  /// existing data keeps whatever it already says, which is right for anything
+  /// the person named themselves. This is the narrow exception: an account
+  /// still sitting at the exact name and icon it was seeded with was never
+  /// chosen, so renaming it is finishing the rename rather than overwriting a
+  /// decision. An account the person renamed, recoloured or re-iconed is left
+  /// alone.
+  void _renameUntouchedDefaults() {
+    for (final a in accounts) {
+      if (a.name == 'Card' && a.icon == 'credit-card') {
+        a
+          ..name = 'Wallet'
+          ..icon = 'wallet';
+      }
+    }
   }
 
   /// Point dangling references at something real.
@@ -530,7 +562,10 @@ class PennyStore extends ChangeNotifier {
         final existing = categories.where((c) => c.name == 'Uncategorised');
         if (existing.isNotEmpty) return existing.first;
         final c = Category(
-            name: 'Uncategorised', kind: TxKind.expense, icon: 'circle');
+          name: 'Uncategorised',
+          kind: TxKind.expense,
+          icon: 'circle',
+        );
         categories.add(c);
         categoryIds.add(c.id);
         return c;
@@ -557,14 +592,20 @@ class PennyStore extends ChangeNotifier {
       }
     }
 
-    rules.removeWhere((r) =>
-        !accountIds.contains(r.accountId) || !categoryIds.contains(r.categoryId));
+    rules.removeWhere(
+      (r) =>
+          !accountIds.contains(r.accountId) ||
+          !categoryIds.contains(r.categoryId),
+    );
 
     // A shortcut is a convenience, not a record: one pointing at an account or
     // category that no longer exists is dropped rather than adopted, because
     // silently repointing it would spend from the wrong account on one tap.
-    shortcuts.removeWhere((s) =>
-        !accountIds.contains(s.accountId) || !categoryIds.contains(s.categoryId));
+    shortcuts.removeWhere(
+      (s) =>
+          !accountIds.contains(s.accountId) ||
+          !categoryIds.contains(s.categoryId),
+    );
   }
 
   /// Newest first, and stable within a day by entry order — backdating a row
@@ -584,8 +625,9 @@ class PennyStore extends ChangeNotifier {
     // as one blob. ~5 rows/day for 3 years is ~650 KB, which encodes in a few
     // ms. Move to sqflite when the blob passes ~1 MB or a save is felt —
     // measure first.
-    SharedPreferences.getInstance()
-        .then((p) => p.setString(_ledgerKey, exportJson()));
+    SharedPreferences.getInstance().then(
+      (p) => p.setString(_ledgerKey, exportJson()),
+    );
   }
 
   // ── First run ─────────────────────────────────────────────────────────────
@@ -628,12 +670,14 @@ class PennyStore extends ChangeNotifier {
     ];
 
     for (final (name, icon, color) in expenses) {
-      categories
-          .add(Category(name: name, kind: TxKind.expense, icon: icon, color: color));
+      categories.add(
+        Category(name: name, kind: TxKind.expense, icon: icon, color: color),
+      );
     }
     for (final (name, icon, color) in incomes) {
-      categories
-          .add(Category(name: name, kind: TxKind.income, icon: icon, color: color));
+      categories.add(
+        Category(name: name, kind: TxKind.income, icon: icon, color: color),
+      );
     }
     _commit();
   }
@@ -643,6 +687,13 @@ class PennyStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_onboardedKey, true);
+  }
+
+  Future<void> setHideAmounts(bool value) async {
+    hideAmounts = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_hideAmountsKey, value);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
@@ -658,8 +709,9 @@ class PennyStore extends ChangeNotifier {
     final now = dayKey(today());
     if (_moments[key] == now) return false;
     _moments[key] = now;
-    SharedPreferences.getInstance()
-        .then((p) => p.setString(_momentsKey, jsonEncode(_moments)));
+    SharedPreferences.getInstance().then(
+      (p) => p.setString(_momentsKey, jsonEncode(_moments)),
+    );
     return true;
   }
 
@@ -680,14 +732,14 @@ class PennyStore extends ChangeNotifier {
   }
 
   List<Category> categoriesOf(TxKind kind) => [
-        for (final c in categories)
-          if (c.kind == kind && !c.archived) c
-      ];
+    for (final c in categories)
+      if (c.kind == kind && !c.archived) c,
+  ];
 
   List<Account> get liveAccounts => [
-        for (final a in accounts)
-          if (!a.archived) a
-      ];
+    for (final a in accounts)
+      if (!a.archived) a,
+  ];
 
   // ── Balances ──────────────────────────────────────────────────────────────
 
@@ -820,14 +872,14 @@ class PennyStore extends ChangeNotifier {
   // ── Backup ────────────────────────────────────────────────────────────────
 
   String exportJson() => jsonEncode({
-        'version': 1,
-        'exportedAt': DateTime.now().toIso8601String(),
-        'accounts': [for (final a in accounts) a.toJson()],
-        'categories': [for (final c in categories) c.toJson()],
-        'txns': [for (final t in txns) t.toJson()],
-        'rules': [for (final r in rules) r.toJson()],
-        'shortcuts': [for (final s in shortcuts) s.toJson()],
-      });
+    'version': 1,
+    'exportedAt': DateTime.now().toIso8601String(),
+    'accounts': [for (final a in accounts) a.toJson()],
+    'categories': [for (final c in categories) c.toJson()],
+    'txns': [for (final t in txns) t.toJson()],
+    'rules': [for (final r in rules) r.toJson()],
+    'shortcuts': [for (final s in shortcuts) s.toJson()],
+  });
 
   /// Replace everything with [raw]. Returns false and changes nothing if the
   /// file cannot be read — decoding happens before any list is cleared.

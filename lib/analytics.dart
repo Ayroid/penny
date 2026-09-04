@@ -31,30 +31,32 @@ Range rangeFor(Period period, DateTime anchor) {
   return switch (period) {
     Period.day => (from: dayKey(d), to: dayKey(d)),
     Period.week => (
-        from: dayKey(startOfWeek(d)),
-        to: dayKey(shiftDays(startOfWeek(d), 6)),
-      ),
+      from: dayKey(startOfWeek(d)),
+      to: dayKey(shiftDays(startOfWeek(d), 6)),
+    ),
     Period.month => (
-        from: dayKey(startOfMonth(d)),
-        // Day zero of the next month is the last day of this one, whatever
-        // its length and without a table of month lengths.
-        to: dayKey(DateTime(d.year, d.month + 1, 0)),
-      ),
+      from: dayKey(startOfMonth(d)),
+      // Day zero of the next month is the last day of this one, whatever
+      // its length and without a table of month lengths.
+      to: dayKey(DateTime(d.year, d.month + 1, 0)),
+    ),
   };
 }
 
 /// [range] shifted [by] whole periods — what the overview's month arrows do.
 Range shiftRange(Period period, DateTime anchor, int by) => switch (period) {
-      Period.day => rangeFor(period, shiftDays(anchor, by)),
-      Period.week => rangeFor(period, shiftDays(anchor, by * 7)),
-      Period.month => rangeFor(period, shiftMonths(anchor, by)),
-    };
+  Period.day => rangeFor(period, shiftDays(anchor, by)),
+  Period.week => rangeFor(period, shiftDays(anchor, by * 7)),
+  Period.month => rangeFor(period, shiftMonths(anchor, by)),
+};
 
 bool inRange(Txn t, Range r) =>
     t.day.compareTo(r.from) >= 0 && t.day.compareTo(r.to) <= 0;
 
-List<Txn> within(List<Txn> txns, Range r) =>
-    [for (final t in txns) if (inRange(t, r)) t];
+List<Txn> within(List<Txn> txns, Range r) => [
+  for (final t in txns)
+    if (inRange(t, r)) t,
+];
 
 /// What came in, what went out, and the difference.
 typedef Totals = ({int income, int expense});
@@ -129,22 +131,36 @@ List<Bucket> series(List<Txn> txns, Period period, DateTime anchor, int count) {
 }
 
 String _labelFor(Period period, DateTime d) => switch (period) {
-      Period.day => '${d.day}',
-      Period.week => '${d.day}/${d.month}',
-      Period.month => _monthShort[d.month - 1],
-    };
+  Period.day => '${d.day}',
+  Period.week => '${d.day}/${d.month}',
+  Period.month => _monthShort[d.month - 1],
+};
 
 const _monthShort = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /// The same figure one period earlier, for "₹1,800 more than last month".
 ///
 /// Returns null when there is nothing to compare against — no prior data at
 /// all — so the caller can stay quiet rather than claim a 100% rise.
-int? changeVsPrevious(List<Txn> txns, Period period, DateTime anchor,
-    {required TxKind kind}) {
+int? changeVsPrevious(
+  List<Txn> txns,
+  Period period,
+  DateTime anchor, {
+  required TxKind kind,
+}) {
   final previous = shiftRange(period, anchor, -1);
   // Nothing recorded on or before the previous period means there is no
   // comparison to make — better silent than claiming a rise from zero.

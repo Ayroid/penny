@@ -154,12 +154,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 12),
 
-                    _FlowCard(totals: totals),
+                    _FlowCard(totals: totals, hidden: store.hideAmounts),
 
                     if (_period == Period.month) ...[
                       const SizedBox(height: 12),
                       _SpendHeatmap(
                         spend: spendByDay(store.txns, range),
+                        hidden: store.hideAmounts,
                         month: parseDay(range.from),
                       ),
                     ],
@@ -219,10 +220,23 @@ class _BalanceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('TOTAL BALANCE', style: text.labelSmall),
-          const SizedBox(height: 2),
+          Row(
+            children: [
+              Text('TOTAL BALANCE', style: text.labelSmall),
+              const Spacer(),
+              // Masking is a per-device preference, not a lock: it is for a
+              // shared desk or someone reading over a shoulder, and it says so
+              // by being one tap away in both directions.
+              RoundIconButton(
+                icon: store.hideAmounts ? LucideIcons.eyeOff : LucideIcons.eye,
+                tooltip: store.hideAmounts ? 'Show amounts' : 'Hide amounts',
+                size: 32,
+                onPressed: () => store.setHideAmounts(!store.hideAmounts),
+              ),
+            ],
+          ),
           Text(
-            rupees(total),
+            store.hideAmounts ? maskedAmount : rupees(total),
             style: mono(
               29,
               color: scheme.onSurface,
@@ -242,10 +256,12 @@ class _BalanceCard extends StatelessWidget {
                     child: Builder(
                       builder: (context) => TintChip(
                         icon: iconFor(a.icon),
-                        label:
-                            '${a.name}  ${rupeesWhole(store.balanceOf(a.id))}',
-                        semanticsLabel:
-                            '${a.name}, ${rupees(store.balanceOf(a.id))}',
+                        label: store.hideAmounts
+                            ? '${a.name}  $maskedAmount'
+                            : '${a.name}  ${rupeesWhole(store.balanceOf(a.id))}',
+                        semanticsLabel: store.hideAmounts
+                            ? '${a.name}, hidden'
+                            : '${a.name}, ${rupees(store.balanceOf(a.id))}',
                       ),
                     ),
                   ),
@@ -265,9 +281,10 @@ class _BalanceCard extends StatelessWidget {
 /// card is for is the two numbers and their difference. Comparing a period to
 /// other periods is the trend chart's job, on Insights.
 class _FlowCard extends StatelessWidget {
-  const _FlowCard({required this.totals});
+  const _FlowCard({required this.totals, required this.hidden});
 
   final Totals totals;
+  final bool hidden;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +305,7 @@ class _FlowCard extends StatelessWidget {
             colour: sproutOf(context),
             label: 'CREDIT',
             amount: totals.income,
+            hidden: hidden,
           ),
           _MeterDivider(colour: scheme.outline),
           _Meter(
@@ -295,12 +313,14 @@ class _FlowCard extends StatelessWidget {
             colour: coinOf(context),
             label: 'DEBIT',
             amount: totals.expense,
+            hidden: hidden,
           ),
           _MeterDivider(colour: scheme.outline),
           _Meter(
             label: 'NET',
             amount: totals.net,
             signed: true,
+            hidden: hidden,
             // Not red when negative. A period that ended down is ordinary,
             // not a failure — the design system is explicit about this.
             colour: scheme.secondary,
@@ -318,6 +338,7 @@ class _Meter extends StatelessWidget {
     required this.colour,
     this.icon,
     this.signed = false,
+    this.hidden = false,
   });
 
   final String label;
@@ -325,6 +346,7 @@ class _Meter extends StatelessWidget {
   final Color colour;
   final IconData? icon;
   final bool signed;
+  final bool hidden;
 
   @override
   Widget build(BuildContext context) {
@@ -333,7 +355,9 @@ class _Meter extends StatelessWidget {
 
     return Expanded(
       child: Semantics(
-        label: '$label, ${rupees(amount, signed: signed)}',
+        label: hidden
+            ? '$label, hidden'
+            : '$label, ${rupees(amount, signed: signed)}',
         excludeSemantics: true,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -356,7 +380,7 @@ class _Meter extends StatelessWidget {
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  rupees(amount, signed: signed),
+                  hidden ? maskedAmount : rupees(amount, signed: signed),
                   style: mono(
                     14,
                     color: scheme.onSurface,
@@ -388,10 +412,15 @@ class _MeterDivider extends StatelessWidget {
 /// unlit-cell wash and the accent at full strength, so a heavy day is solid and
 /// a light one barely there.
 class _SpendHeatmap extends StatelessWidget {
-  const _SpendHeatmap({required this.spend, required this.month});
+  const _SpendHeatmap({
+    required this.spend,
+    required this.month,
+    required this.hidden,
+  });
 
   final Map<String, int> spend;
   final DateTime month;
+  final bool hidden;
 
   @override
   Widget build(BuildContext context) {
@@ -447,6 +476,7 @@ class _SpendHeatmap extends StatelessWidget {
                   amount:
                       spend[dayKey(DateTime(month.year, month.month, d))] ?? 0,
                   peak: peak,
+                  hidden: hidden,
                 ),
             ],
           ),
@@ -457,11 +487,17 @@ class _SpendHeatmap extends StatelessWidget {
 }
 
 class _Cell extends StatelessWidget {
-  const _Cell({required this.day, required this.amount, required this.peak});
+  const _Cell({
+    required this.day,
+    required this.amount,
+    required this.peak,
+    required this.hidden,
+  });
 
   final int day;
   final int amount;
   final int peak;
+  final bool hidden;
 
   @override
   Widget build(BuildContext context) {
@@ -479,7 +515,7 @@ class _Cell extends StatelessWidget {
           : 'Day $day, ${rupees(amount)}',
       excludeSemantics: true,
       child: Tooltip(
-        message: amount == 0 ? '$day' : '$day · ${rupees(amount)}',
+        message: amount == 0 || hidden ? '$day' : '$day · ${rupees(amount)}',
         child: Container(
           decoration: BoxDecoration(
             color: colour,
@@ -513,10 +549,7 @@ class _QuickAddStrip extends StatelessWidget {
         // overline as RECENT and SPEND BY DAY.
         Padding(
           padding: const EdgeInsets.only(left: 8, bottom: 6),
-          child: Text(
-            'PINNED',
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
+          child: Text('PINNED', style: Theme.of(context).textTheme.labelSmall),
         ),
         SizedBox(
           height: 44,
@@ -561,8 +594,8 @@ class _QuickAddChip extends StatelessWidget {
         color: colour.withValues(alpha: isDark(context) ? 0.15 : 0.12),
         borderRadius: BorderRadius.circular(pill),
         child: InkWell(
-          onTap: () => _add(context),
-          onLongPress: () => _unpin(context),
+          onTap: _add,
+          onLongPress: _unpin,
           borderRadius: BorderRadius.circular(pill),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
@@ -600,42 +633,12 @@ class _QuickAddChip extends StatelessWidget {
     );
   }
 
-  void _add(BuildContext context) {
-    final txn = shortcut.toTxn();
-    store.addTxn(txn);
-
-    // Added on one tap, so it has to be undoable on one more. Without this the
-    // shortcut is a trap: a mis-tap costs a trip through the ledger to find
-    // and delete the row.
-    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Added ${rupees(txn.amountMinor)}'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'UNDO',
-          onPressed: () => store.removeTxn(txn),
-        ),
-      ),
-    );
+  void _add() {
+    // No confirmation and no toast: the row appears at the top of RECENT on
+    // the same screen, which is the feedback. Correcting a mis-tap means
+    // opening that row and deleting it.
+    store.addTxn(shortcut.toTxn());
   }
 
-  void _unpin(BuildContext context) {
-    final at = store.shortcuts.indexWhere((s) => s.id == shortcut.id);
-    store.removeShortcut(shortcut);
-
-    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('Unpinned'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'UNDO',
-          // Back where it was, not on the end — the strip's order is the order
-          // things were pinned in, and an undo should not quietly reorder it.
-          onPressed: () => store.insertShortcutAt(at, shortcut),
-        ),
-      ),
-    );
-  }
+  void _unpin() => store.removeShortcut(shortcut);
 }
