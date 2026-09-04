@@ -38,20 +38,28 @@ GROUND = (255, 248, 241, 255)
 # the canvas instead sends the cut off the edge, where the mask hides it, and
 # the icon reads as a face rising into the frame — which is the whole point of
 # cropping it in the first place.
-ADAPTIVE_WIDTH = 0.72
+ADAPTIVE_SAFE = 2 / 3
 
 
 def path(*parts):
     return os.path.join(ROOT, *parts)
 
 
-def trimmed(im):
+def trimmed(im, threshold=8):
     """The image cropped to its own alpha bounding box.
+
+    Thresholded, because `Image.getbbox()` trims on alpha > 0 and the source
+    art carries near-invisible noise — stray pixels at alpha 1-8 hugging the
+    canvas edge. Invisible on screen, but a bounding box does not care how
+    faint a pixel is: the ghost drags the computed centre sideways and inflates
+    the width, which scales the mascot down and shifts it off-centre. Measured
+    on the candle: 88px of phantom to the left, and 180px of spurious width.
 
     Source padding varies per pose, so framing has to work off what is actually
     drawn rather than off the canvas it was drawn on.
     """
-    box = im.getbbox()
+    alpha = im.getchannel("A").point(lambda v: 255 if v > threshold else 0)
+    box = alpha.getbbox()
     return im.crop(box) if box else im
 
 
@@ -96,11 +104,18 @@ def make_icons(size=1024):
     ios.alpha_composite(source.resize((size, size), Image.LANCZOS))
     ios.convert("RGB").save(path("assets", "icon", "app_icon.png"), optimize=True)
 
-    # Android adaptive: scaled by WIDTH so the leaves and eyes land inside the
-    # guaranteed centre, then bottom-aligned to the canvas so the coin's cut
-    # edge runs off it and the mask takes the blame.
+    # Android adaptive: the foreground is 108dp, of which only the centre 72dp
+    # — two thirds — is guaranteed to survive the launcher's mask. So pin the
+    # art's top to the top of that safe box and let its bottom run to the
+    # canvas edge, where the mask crops it. That is the framing the crop was
+    # drawn for: a face rising into frame, with the cut edge hidden rather than
+    # floating mid-icon. Derived from the guarantee rather than tuned by eye.
     art = trimmed(source)
-    scale = (size * ADAPTIVE_WIDTH) / art.width
+    safe_top = size * (1 - ADAPTIVE_SAFE) / 2
+    scale = min(
+        (size - safe_top) / art.height,   # tall art: bottom bleeds off
+        (size * ADAPTIVE_SAFE) / art.width,  # wide art: width is the limit
+    )
     art = art.resize(
         (round(art.width * scale), round(art.height * scale)), Image.LANCZOS
     )
