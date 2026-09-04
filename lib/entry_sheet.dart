@@ -142,6 +142,44 @@ class _EntrySheetState extends State<_EntrySheet> {
     Navigator.of(context).pop();
   }
 
+  /// Deleting is irreversible and there is no undo anywhere in the app, so it
+  /// asks. The amount is in the question: "delete this?" is easy to say yes to
+  /// on the wrong row.
+  Future<void> _confirmDelete() async {
+    final txn = widget.existing!;
+    final category = widget.store.categoryById(txn.categoryId)?.name ?? '';
+    final gone = await showDialog<bool>(
+      context: context,
+      barrierColor: navy.withValues(alpha: 0.32),
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this entry?'),
+        content: Text(
+          '${rupees(txn.amountMinor)}'
+          '${category.isEmpty ? '' : ' · $category'}'
+          '${txn.note.isEmpty ? '' : ' · ${txn.note}'}'
+          '\n\nThis cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (gone != true || !mounted) return;
+    widget.store.removeTxn(txn);
+    if (mounted) Navigator.of(context).pop();
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -344,17 +382,23 @@ class _EntrySheetState extends State<_EntrySheet> {
                     onPressed: _valid ? _save : null,
                     child: Text(widget.existing == null ? 'Add' : 'Save'),
                   ),
-                  if (widget.existing != null)
-                    TextButton(
-                      onPressed: () {
-                        widget.store.removeTxn(widget.existing!);
-                        Navigator.of(context).pop();
-                      },
-                      child: Text(
-                        'Delete',
-                        style: text.labelLarge?.copyWith(color: scheme.error),
+                  if (widget.existing != null) ...[
+                    const SizedBox(height: 4),
+                    // Same 52-high full-width shape as Save, so the two read
+                    // as a pair rather than one being an afterthought — but
+                    // filled with the error colour at wash strength, never at
+                    // full: a destructive action should be findable, not the
+                    // loudest thing on the sheet.
+                    OutlinedButton(
+                      onPressed: _confirmDelete,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: scheme.error.withValues(alpha: 0.10),
+                        foregroundColor: scheme.error,
+                        textStyle: text.labelLarge?.copyWith(fontSize: 15),
                       ),
+                      child: const Text('Delete'),
                     ),
+                  ],
                 ],
               ),
             ),

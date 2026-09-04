@@ -493,6 +493,17 @@ TextStyle mono(
   letterSpacing: spacing,
 );
 
+/// A strut that pins a line's height to the font size, whatever glyphs land
+/// in it.
+///
+/// Needed wherever text swaps between digits and the mask: `•` is not in the
+/// platform mono, so it is drawn by a fallback font with its own ascent and
+/// descent, and the line grows or shrinks as the amounts are hidden. That
+/// moves everything below it on the screen. The same applies to `₹`, which not
+/// every mono carries either.
+StrutStyle monoStrut(double size) =>
+    StrutStyle(fontFamily: monoFamily, fontSize: size, forceStrutHeight: true);
+
 /// A round icon button in a soft well — the only chrome shape used for
 /// navigation.
 class RoundIconButton extends StatelessWidget {
@@ -721,6 +732,7 @@ class TintChip extends StatelessWidget {
           Text(
             label,
             semanticsLabel: semanticsLabel,
+            strutStyle: monoStrut(12),
             style: mono(12, color: ink, weight: FontWeight.w700),
           ),
         ],

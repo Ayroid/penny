@@ -439,6 +439,8 @@ void main() {
       await scrollToRows(tester);
       await tester.tap(find.byType(TxnRow).first);
       await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, 'Delete'));
       await tester.pumpAndSettle();
 
@@ -528,6 +530,41 @@ void main() {
       expect(find.text('Cash  $maskedAmount'), findsOneWidget);
     });
 
+    testWidgets('nothing below the balance moves when it is hidden',
+        (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      // Amounts wide enough that the account chips have a real layout to
+      // disturb — a mask is a different width from a number, and if that
+      // reflows the Wrap the whole screen jumps.
+      store.addTxn(Txn(
+          kind: TxKind.income,
+          amountMinor: 8500000,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.income).first.id,
+          accountId: store.accounts[1].id));
+      store.addTxn(Txn(
+          kind: TxKind.expense,
+          amountMinor: 1849900,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id));
+
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      final shownCard = tester.getSize(find.byType(TintCard).first);
+      final shownBelow = tester.getTopLeft(find.text('CREDIT')).dy;
+
+      await tester.tap(find.byTooltip('Hide amounts'));
+      await tester.pumpAndSettle();
+
+      expect(tester.getSize(find.byType(TintCard).first).height,
+          shownCard.height,
+          reason: 'the balance card changed height');
+      expect(tester.getTopLeft(find.text('CREDIT')).dy, shownBelow,
+          reason: 'everything below the balance card moved');
+    });
+
     testWidgets('it is one tap back', (tester) async {
       phone(tester);
       final store = await emptyStore();
@@ -571,5 +608,65 @@ void main() {
     await next.load();
     expect(next.hideAmounts, isTrue,
         reason: 'having to hide it again every launch is why people stop');
+  });
+
+  group('deleting an entry', () {
+    Future<PennyStore> withOne(WidgetTester tester) async {
+      final store = await emptyStore();
+      store.addTxn(Txn(
+          kind: TxKind.expense,
+          amountMinor: 45000,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+          note: 'lunch'));
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await scrollToRows(tester);
+      await tester.tap(find.byType(TxnRow).first);
+      await tester.pumpAndSettle();
+      return store;
+    }
+
+    testWidgets('Delete is the same shape as Save', (tester) async {
+      phone(tester);
+      await withOne(tester);
+
+      final save = tester.getSize(find.widgetWithText(FilledButton, 'Save'));
+      final del = tester.getSize(find.widgetWithText(OutlinedButton, 'Delete'));
+      expect(del.width, save.width);
+      expect(del.height, save.height);
+    });
+
+    testWidgets('it asks first, and Keep changes nothing', (tester) async {
+      phone(tester);
+      final store = await withOne(tester);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      // The amount is in the question — "delete this?" is easy to say yes to
+      // on the wrong row.
+      expect(find.text('Delete this entry?'), findsOneWidget);
+      expect(find.textContaining('₹450.00'), findsWidgets);
+      expect(find.textContaining('lunch'), findsWidgets);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Keep'));
+      await tester.pumpAndSettle();
+      expect(store.txns, hasLength(1), reason: 'Keep must keep it');
+    });
+
+    testWidgets('confirming deletes it and closes the sheet', (tester) async {
+      phone(tester);
+      final store = await withOne(tester);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns, isEmpty);
+      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+    });
   });
 }

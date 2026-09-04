@@ -121,6 +121,7 @@ class TxnRow extends StatelessWidget {
                 children: [
                   Text(
                     amount,
+                    strutStyle: monoStrut(13.5),
                     style: mono(
                       13.5,
                       // Income is the brand's own green because it is the thing

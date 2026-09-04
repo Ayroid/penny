@@ -237,6 +237,7 @@ class _BalanceCard extends StatelessWidget {
           ),
           Text(
             store.hideAmounts ? maskedAmount : rupees(total),
+            strutStyle: monoStrut(29),
             style: mono(
               29,
               color: scheme.onSurface,
@@ -381,6 +382,7 @@ class _Meter extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: Text(
                   hidden ? maskedAmount : rupees(amount, signed: signed),
+                  strutStyle: monoStrut(14),
                   style: mono(
                     14,
                     color: scheme.onSurface,
@@ -444,9 +446,17 @@ class _SpendHeatmap extends StatelessWidget {
               ),
               const Spacer(),
               if (peak > 0)
-                Text(
-                  'busiest ${rupeesWhole(peak)}',
-                  style: mono(11, color: scheme.secondary),
+                // Masked rather than removed, so the row keeps its shape
+                // either way. Flexible because a large peak plus the label is
+                // wider than a narrow phone.
+                Flexible(
+                  child: Text(
+                    'busiest ${hidden ? maskedAmount : rupeesWhole(peak)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    strutStyle: monoStrut(11),
+                    style: mono(11, color: scheme.secondary),
+                  ),
                 ),
             ],
           ),
