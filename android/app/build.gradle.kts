@@ -5,7 +5,13 @@ plugins {
 }
 
 base {
-    // APK filenames: penny-arm64-v8a-release.apk instead of app-arm64-v8a-...
+    // Names the intermediate artefacts penny-* rather than app-*.
+    //
+    // It does NOT rename what `flutter build apk` drops in
+    // build/app/outputs/flutter-apk — the Flutter Gradle plugin writes those
+    // itself and they stay app-<abi>-release.apk. The APKs anyone is handed
+    // get their name from tool/release.sh, which renames on copy. Wick's
+    // comment here claims otherwise and is wrong.
     archivesName.set("penny")
 }
 

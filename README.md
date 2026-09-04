@@ -102,5 +102,7 @@ way a raster cannot.
 
 `../design-system.html` is the contract, and Wick is the reference
 implementation. Penny differs from it in the accent alone: sprout `#34B863`,
-navy `#16295C`, cream `#FFF8F1`. See `PLAN.md` for the three places the plan was
-corrected while building.
+navy `#16295C`, cream `#FFF8F1`.
+
+`FEATURES.md` is the live checklist — what is built, what is broken, what is
+next, and the decisions that are settled.
