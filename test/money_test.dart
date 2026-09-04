@@ -51,6 +51,15 @@ void main() {
   });
 
   group('parsing what was typed', () {
+    test('a typed amount is rupees, not paise', () {
+      // The keypad this replaced built paise-first, so 5-0-0 meant ₹5.00.
+      // A field prefixed with ₹ cannot work that way: 500 is five hundred,
+      // and the paise only appear once a decimal point is typed.
+      expect(rupees(parseRupees('500')!), '₹500.00');
+      expect(rupees(parseRupees('5.00')!), '₹5.00');
+      expect(rupees(parseRupees('5')!), '₹5.00');
+    });
+
     test('plain rupees', () {
       expect(parseRupees('450'), 45000);
       expect(parseRupees('0'), 0);

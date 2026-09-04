@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'clock.dart';
@@ -118,7 +119,14 @@ ThemeData appTheme({required bool dark}) {
     useMaterial3: true,
     fontFamily: fontFamily,
     scaffoldBackgroundColor: bg,
-    splashFactory: InkSparkle.splashFactory,
+    // InkSparkle is Android's Material 3 splash, and it draws itself with a
+    // shader loaded from an asset. That resolves fine on Android; on desktop
+    // the lookup can fail after a hot restart and then throws on every single
+    // tap. Nothing about the brand depends on which of the two ripples runs,
+    // so everywhere else gets the shader-free one.
+    splashFactory: defaultTargetPlatform == TargetPlatform.android
+        ? InkSparkle.splashFactory
+        : InkRipple.splashFactory,
     colorScheme: ColorScheme(
       brightness: dark ? Brightness.dark : Brightness.light,
       primary: accent,
