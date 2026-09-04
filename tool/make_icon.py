@@ -40,6 +40,17 @@ GROUND = (255, 248, 241, 255)
 # cropping it in the first place.
 ADAPTIVE_SAFE = 2 / 3
 
+# ...and then a little past it. The 2/3 guarantee is the floor Android
+# promises, not what a launcher actually shows — most mask a circle inscribed
+# in the full 108dp, so an icon framed to the guarantee looks small in every
+# real launcher. This oversizes by 10%, which puts the top of the art just
+# outside the guaranteed box. The trade is deliberate: a mask aggressive enough
+# to clip it would be clipping the corners off every other icon on the phone.
+#
+# Two 10% steps, tuned by looking at it rather than derived — 1.10 still read
+# small against the launcher's own icons.
+ADAPTIVE_OVERSIZE = 1.21
+
 
 def path(*parts):
     return os.path.join(ROOT, *parts)
@@ -112,8 +123,8 @@ def make_icons(size=1024):
     # floating mid-icon. Derived from the guarantee rather than tuned by eye.
     art = trimmed(source)
     safe_top = size * (1 - ADAPTIVE_SAFE) / 2
-    scale = min(
-        (size - safe_top) / art.height,   # tall art: bottom bleeds off
+    scale = ADAPTIVE_OVERSIZE * min(
+        (size - safe_top) / art.height,  # tall art: bottom bleeds off
         (size * ADAPTIVE_SAFE) / art.width,  # wide art: width is the limit
     )
     art = art.resize(
