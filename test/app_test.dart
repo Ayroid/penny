@@ -6,6 +6,7 @@ import 'package:penny/analytics_screen.dart';
 import 'package:penny/main.dart';
 import 'package:penny/onboarding.dart';
 import 'package:penny/store.dart';
+import 'package:penny/txn_row.dart';
 import 'package:penny/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,7 +17,6 @@ Future<PennyStore> emptyStore() async {
   s.seedDefaults();
   return s;
 }
-
 
 /// A phone-shaped viewport.
 ///
@@ -30,18 +30,32 @@ void phone(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// The overview as the shell actually composes it.
+///
+/// `RootScreen` wraps its pages in a `ListenableBuilder`, so a page repaints
+/// when the store changes. Pumping `HomePage` bare instead means it never sees
+/// anything added through a sheet.
+Widget home(PennyStore store, {bool dark = false}) => wrap(
+  ListenableBuilder(
+    listenable: store,
+    builder: (context, _) => HomePage(store: store, onSettings: () {}),
+  ),
+  dark: dark,
+);
+
 Widget wrap(Widget child, {bool dark = false}) => MaterialApp(
-      theme: appTheme(dark: dark),
-      home: child,
-    );
+  theme: appTheme(dark: dark),
+  home: child,
+);
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('the overview opens on an empty ledger and offers a way in',
-      (tester) async {
+  testWidgets('the overview opens on an empty ledger and offers a way in', (
+    tester,
+  ) async {
     final store = await emptyStore();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
 
     expect(find.text('TOTAL BALANCE'), findsOneWidget);
@@ -53,7 +67,7 @@ void main() {
   testWidgets('typing an amount and saving it', (tester) async {
     phone(tester);
     final store = await emptyStore();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Add a transaction').first);
@@ -76,7 +90,7 @@ void main() {
   testWidgets('paise are typed after a decimal point', (tester) async {
     phone(tester);
     final store = await emptyStore();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add a transaction').first);
     await tester.pumpAndSettle();
@@ -92,7 +106,7 @@ void main() {
   testWidgets('an empty or zero amount cannot be saved', (tester) async {
     phone(tester);
     final store = await emptyStore();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add a transaction').first);
     await tester.pumpAndSettle();
@@ -114,7 +128,7 @@ void main() {
   testWidgets('the field refuses a third decimal place', (tester) async {
     phone(tester);
     final store = await emptyStore();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add a transaction').first);
     await tester.pumpAndSettle();
@@ -130,11 +144,12 @@ void main() {
     expect(store.txns.single.amountMinor, 1234);
   });
 
-  testWidgets('a transfer needs two different accounts before it can save',
-      (tester) async {
+  testWidgets('a transfer needs two different accounts before it can save', (
+    tester,
+  ) async {
     phone(tester);
     final store = await emptyStore();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add a transaction').first);
     await tester.pumpAndSettle();
@@ -148,31 +163,37 @@ void main() {
 
     expect(store.txns.single.kind, TxKind.transfer);
     expect(store.txns.single.toAccountId, isNotNull);
-    expect(store.txns.single.toAccountId,
-        isNot(store.txns.single.accountId));
+    expect(store.txns.single.toAccountId, isNot(store.txns.single.accountId));
     // The whole point: moving money does not change how much there is.
     expect(store.totalBalance, 0);
   });
 
-  testWidgets('the ledger groups by day and carries a running balance',
-      (tester) async {
+  testWidgets('the ledger groups by day and carries a running balance', (
+    tester,
+  ) async {
     final store = await emptyStore();
     final cash = store.accounts.first.id;
     final food = store.categoriesOf(TxKind.expense).first.id;
     final salary = store.categoriesOf(TxKind.income).first.id;
-    store.addTxn(Txn(
+    store.addTxn(
+      Txn(
         kind: TxKind.income,
         amountMinor: 8000000,
         day: dayKey(today()),
         categoryId: salary,
-        accountId: cash));
-    store.addTxn(Txn(
+        accountId: cash,
+      ),
+    );
+    store.addTxn(
+      Txn(
         kind: TxKind.expense,
         amountMinor: 45000,
         day: dayKey(shiftDays(today(), -1)),
         categoryId: food,
         accountId: cash,
-        note: 'lunch'));
+        note: 'lunch',
+      ),
+    );
 
     await tester.pumpWidget(wrap(LedgerPage(store: store)));
     await tester.pumpAndSettle();
@@ -188,13 +209,16 @@ void main() {
     final store = await emptyStore();
     final cash = store.accounts.first.id;
     for (final (note, amount) in [('lunch', 45000), ('petrol', 200000)]) {
-      store.addTxn(Txn(
+      store.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: amount,
           day: dayKey(today()),
           categoryId: store.categoriesOf(TxKind.expense).first.id,
           accountId: cash,
-          note: note));
+          note: note,
+        ),
+      );
     }
 
     await tester.pumpWidget(wrap(LedgerPage(store: store)));
@@ -219,18 +243,24 @@ void main() {
     final store = await emptyStore();
     final cash = store.accounts.first.id;
     final cats = store.categoriesOf(TxKind.expense);
-    store.addTxn(Txn(
+    store.addTxn(
+      Txn(
         kind: TxKind.expense,
         amountMinor: 300000,
         day: dayKey(today()),
         categoryId: cats[0].id,
-        accountId: cash));
-    store.addTxn(Txn(
+        accountId: cash,
+      ),
+    );
+    store.addTxn(
+      Txn(
         kind: TxKind.expense,
         amountMinor: 100000,
         day: dayKey(today()),
         categoryId: cats[1].id,
-        accountId: cash));
+        accountId: cash,
+      ),
+    );
 
     await tester.pumpWidget(wrap(InsightsPage(store: store)));
     await tester.pumpAndSettle();
@@ -242,12 +272,15 @@ void main() {
 
   testWidgets('every screen renders in dark mode too', (tester) async {
     final store = await emptyStore();
-    store.addTxn(Txn(
+    store.addTxn(
+      Txn(
         kind: TxKind.expense,
         amountMinor: 45000,
         day: dayKey(today()),
         categoryId: store.categoriesOf(TxKind.expense).first.id,
-        accountId: store.accounts.first.id));
+        accountId: store.accounts.first.id,
+      ),
+    );
 
     for (final page in [
       HomePage(store: store, onSettings: () {}),
@@ -264,8 +297,9 @@ void main() {
     // Every other test pumps a page directly with a store already loaded,
     // which is exactly why the launch-frame hang got through: `App` was the
     // one widget nothing exercised end to end.
-    testWidgets('leaves the launch frame once the store has loaded',
-        (tester) async {
+    testWidgets('leaves the launch frame once the store has loaded', (
+      tester,
+    ) async {
       await tester.pumpWidget(const App());
 
       // First frame: nothing loaded, so the drawn mark stands in.
@@ -273,13 +307,17 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.byType(LaunchFrame), findsNothing,
-          reason: 'a loaded store must not leave the app on its splash');
+      expect(
+        find.byType(LaunchFrame),
+        findsNothing,
+        reason: 'a loaded store must not leave the app on its splash',
+      );
       expect(find.byType(OnboardingScreen), findsOneWidget);
     });
 
-    testWidgets('goes straight to the shell for someone already onboarded',
-        (tester) async {
+    testWidgets('goes straight to the shell for someone already onboarded', (
+      tester,
+    ) async {
       SharedPreferences.setMockInitialValues({'onboarded': true});
 
       await tester.pumpWidget(const App());
@@ -295,76 +333,157 @@ void main() {
       await tester.pumpWidget(const App());
       await tester.pumpAndSettle();
 
-      expect(Theme.of(tester.element(find.byType(RootScreen))).brightness,
-          Brightness.light);
+      expect(
+        Theme.of(tester.element(find.byType(RootScreen))).brightness,
+        Brightness.light,
+      );
 
       final store = tester.state<State<App>>(find.byType(App));
       // ignore: avoid_dynamic_calls
       await (store as dynamic).store.setThemeMode(ThemeMode.dark);
       await tester.pumpAndSettle();
 
-      expect(Theme.of(tester.element(find.byType(RootScreen))).brightness,
-          Brightness.dark);
+      expect(
+        Theme.of(tester.element(find.byType(RootScreen))).brightness,
+        Brightness.dark,
+      );
     });
   });
 
-  group('quick add', () {
-    Future<PennyStore> withHistory() async {
-      final store = await emptyStore();
-      final cash = store.accounts.first.id;
-      final food = store.categoriesOf(TxKind.expense).first.id;
-      for (var i = 0; i < 3; i++) {
-        store.addTxn(Txn(
-            kind: TxKind.expense,
-            amountMinor: 2000,
-            day: dayKey(shiftDays(today(), -i)),
-            categoryId: food,
-            accountId: cash,
-            note: 'chai'));
-      }
-      return store;
+  group('pinned shortcuts', () {
+    /// Add a transaction through the sheet, with the pin toggled on.
+    Future<void> addPinned(WidgetTester tester, String amount) async {
+      await tester.tap(find.byTooltip('Add a transaction').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, amount);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Pin to the overview'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pumpAndSettle();
     }
 
-    testWidgets('a repeated entry becomes a one-tap chip', (tester) async {
-      final store = await withHistory();
-      await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    testWidgets('nothing is pinned until the person pins it', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Add chai, ₹20'), findsOneWidget);
-
-      await tester.tap(find.bySemanticsLabel('Add chai, ₹20'));
+      // Entering things does not conjure chips: the strip is curated, never
+      // guessed at from history.
+      await tester.tap(find.byTooltip('Add a transaction').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '20');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pumpAndSettle();
 
-      expect(store.txns, hasLength(4));
-      expect(store.txns.first.note, 'chai');
+      expect(store.txns, hasLength(1));
+      expect(store.shortcuts, isEmpty);
+      expect(find.text('PINNED'), findsNothing);
+    });
+
+    testWidgets('pinning puts it on the overview', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+
+      await addPinned(tester, '20');
+
+      expect(store.shortcuts, hasLength(1));
+      expect(store.shortcuts.single.amountMinor, 2000);
+      expect(find.text('PINNED'), findsOneWidget);
+      expect(find.bySemanticsLabel('Add Food & Drink, ₹20'), findsOneWidget);
+    });
+
+    testWidgets('a pinned chip adds to today on one tap', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await addPinned(tester, '20');
+
+      await tester.tap(find.bySemanticsLabel('Add Food & Drink, ₹20'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns, hasLength(2));
       expect(store.txns.first.amountMinor, 2000);
-      expect(store.txns.first.day, dayKey(today()),
-          reason: 'a quick add lands on today, not on the day it copied');
+      expect(store.txns.first.day, dayKey(today()));
     });
 
     testWidgets('one tap adds it, one more takes it back', (tester) async {
-      final store = await withHistory();
-      await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
+      await addPinned(tester, '20');
 
-      await tester.tap(find.bySemanticsLabel('Add chai, ₹20'));
+      await tester.tap(find.bySemanticsLabel('Add Food & Drink, ₹20'));
       await tester.pumpAndSettle();
-      expect(store.txns, hasLength(4));
+      expect(store.txns, hasLength(2));
 
-      // Added on one tap, so a mis-tap must cost one tap to reverse — not a
-      // trip through the ledger to find the row.
       await tester.tap(find.text('UNDO'));
       await tester.pumpAndSettle();
-      expect(store.txns, hasLength(3));
+      expect(store.txns, hasLength(1));
     });
 
-    testWidgets('an empty ledger shows no chips', (tester) async {
+    testWidgets('long press unpins, and that is undoable too', (tester) async {
+      phone(tester);
       final store = await emptyStore();
-      await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+      await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
-      // Scoped to a quick-add chip's own label shape — the empty state has an
-      // "Add a transaction" button of its own, which is not a chip.
-      expect(find.bySemanticsLabel(RegExp(r'^Add .+, ₹')), findsNothing);
+      await addPinned(tester, '20');
+
+      await tester.longPress(find.bySemanticsLabel('Add Food & Drink, ₹20'));
+      await tester.pumpAndSettle();
+      expect(store.shortcuts, isEmpty);
+      expect(find.text('PINNED'), findsNothing);
+
+      await tester.tap(find.text('UNDO'));
+      await tester.pumpAndSettle();
+      expect(store.shortcuts, hasLength(1));
+    });
+
+    testWidgets('pinning the same thing twice leaves one chip', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+
+      await addPinned(tester, '20');
+      await addPinned(tester, '20');
+
+      // Two chips that cannot be told apart is exactly what the guessed
+      // version got wrong.
+      expect(store.shortcuts, hasLength(1));
+      expect(store.txns, hasLength(2));
+    });
+
+    testWidgets('the toggle reflects what is already pinned', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await addPinned(tester, '20');
+
+      // Reopen that transaction from the RECENT list. Scoped by the row's own
+      // announcement, because the pinned chip carries the same words and
+      // tapping that would add another transaction instead of editing one.
+      // The overview's ListView builds lazily, so the RECENT rows are not in
+      // the tree until they are scrolled into it.
+      await tester.scrollUntilVisible(find.byType(TxnRow), 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.byType(TxnRow).first);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Pinned to the overview'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Pinned to the overview'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(store.shortcuts, isEmpty);
     });
   });
 }

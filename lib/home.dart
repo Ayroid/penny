@@ -89,7 +89,10 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _BalanceCard(store: store),
 
-                  if (store.txns.isNotEmpty) ...[
+                  // Gated on what is pinned, not on whether there is history:
+                  // deleting every transaction should not silently drop the
+                  // shortcuts someone chose to keep.
+                  if (store.shortcuts.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _QuickAddStrip(store: store),
                   ],
@@ -499,8 +502,8 @@ class _QuickAddStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final suggestions = quickAdds(store.txns);
-    if (suggestions.isEmpty) return const SizedBox.shrink();
+    final pinned = store.shortcuts;
+    if (pinned.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -511,7 +514,7 @@ class _QuickAddStrip extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 8, bottom: 6),
           child: Text(
-            'TAP TO ADD AGAIN',
+            'PINNED',
             style: Theme.of(context).textTheme.labelSmall,
           ),
         ),
@@ -520,10 +523,10 @@ class _QuickAddStrip extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.zero,
-            itemCount: suggestions.length,
+            itemCount: pinned.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, i) =>
-                _QuickAddChip(store: store, suggestion: suggestions[i]),
+                _QuickAddChip(store: store, shortcut: pinned[i]),
           ),
         ),
       ],
@@ -532,32 +535,34 @@ class _QuickAddStrip extends StatelessWidget {
 }
 
 class _QuickAddChip extends StatelessWidget {
-  const _QuickAddChip({required this.store, required this.suggestion});
+  const _QuickAddChip({required this.store, required this.shortcut});
 
   final PennyStore store;
-  final QuickAdd suggestion;
+  final Shortcut shortcut;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final category = store.categoryById(suggestion.categoryId);
+    final category = store.categoryById(shortcut.categoryId);
     final colour = catColorAt(category?.color ?? defaultCatColor);
-    final label = suggestion.note.isNotEmpty
-        ? suggestion.note
-        : category?.name ?? 'Again';
-    final amount = suggestion.kind == TxKind.income
-        ? rupeesWhole(suggestion.amountMinor, signed: true)
-        : rupeesWhole(suggestion.amountMinor);
+    final label = shortcut.note.isNotEmpty
+        ? shortcut.note
+        : category?.name ?? 'Pinned';
+    final amount = shortcut.kind == TxKind.income
+        ? rupeesWhole(shortcut.amountMinor, signed: true)
+        : rupeesWhole(shortcut.amountMinor);
 
     return Semantics(
       button: true,
       label: 'Add $label, $amount',
+      hint: 'Long press to unpin',
       excludeSemantics: true,
       child: Material(
         color: colour.withValues(alpha: isDark(context) ? 0.15 : 0.12),
         borderRadius: BorderRadius.circular(pill),
         child: InkWell(
           onTap: () => _add(context),
+          onLongPress: () => _unpin(context),
           borderRadius: BorderRadius.circular(pill),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
@@ -596,7 +601,7 @@ class _QuickAddChip extends StatelessWidget {
   }
 
   void _add(BuildContext context) {
-    final txn = txnFrom(suggestion);
+    final txn = shortcut.toTxn();
     store.addTxn(txn);
 
     // Added on one tap, so it has to be undoable on one more. Without this the
@@ -610,6 +615,25 @@ class _QuickAddChip extends StatelessWidget {
         action: SnackBarAction(
           label: 'UNDO',
           onPressed: () => store.removeTxn(txn),
+        ),
+      ),
+    );
+  }
+
+  void _unpin(BuildContext context) {
+    final at = store.shortcuts.indexWhere((s) => s.id == shortcut.id);
+    store.removeShortcut(shortcut);
+
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Unpinned'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'UNDO',
+          // Back where it was, not on the end — the strip's order is the order
+          // things were pinned in, and an undo should not quietly reorder it.
+          onPressed: () => store.insertShortcutAt(at, shortcut),
         ),
       ),
     );

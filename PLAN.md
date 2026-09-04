@@ -669,6 +669,6 @@ under no test at all.
 Straight from the feature list above, in the order that pays best:
 
 ```
-v1.1  ~~quick-add from recent~~ shipped · duplicate a transaction · CSV export
+v1.1  ~~quick-add~~ shipped as pinned shortcuts · duplicate · CSV export
 v1.2  calendar month view · month-over-month · budgets (dim, never red)
 ```

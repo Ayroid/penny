@@ -57,6 +57,12 @@ class _EntrySheetState extends State<_EntrySheet> {
   late String? _toAccountId = widget.existing?.toAccountId;
   late final _note = TextEditingController(text: widget.existing?.note ?? '');
 
+  /// Whether this should be kept one tap away on the overview. Reflects what
+  /// is already pinned when editing, so the toggle is never a lie.
+  late bool _pinned =
+      widget.existing != null &&
+      widget.store.shortcutFor(widget.existing!) != null;
+
   /// Paise. The amount is a string only while it is being typed — it is
   /// parsed exactly once, here, and is an integer everywhere else.
   int get _minor => parseRupees(_amount.text) ?? 0;
@@ -104,6 +110,11 @@ class _EntrySheetState extends State<_EntrySheet> {
         ),
       );
     } else {
+      // Un-pin against the row as it was, before the edits land — otherwise a
+      // changed amount leaves the old shortcut orphaned on the overview.
+      final existing = widget.store.shortcutFor(t);
+      if (existing != null) widget.store.removeShortcut(existing);
+
       t
         ..kind = _kind
         ..amountMinor = _minor
@@ -114,6 +125,20 @@ class _EntrySheetState extends State<_EntrySheet> {
         ..note = _note.text.trim();
       widget.store.touch();
     }
+
+    if (_pinned) {
+      widget.store.addShortcut(
+        Shortcut(
+          kind: _kind,
+          amountMinor: _minor,
+          categoryId: _category!.id,
+          accountId: _accountId,
+          toAccountId: _kind == TxKind.transfer ? _toAccountId : null,
+          note: _note.text.trim(),
+        ),
+      );
+    }
+
     Navigator.of(context).pop();
   }
 
@@ -297,6 +322,24 @@ class _EntrySheetState extends State<_EntrySheet> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Pinning is opt-in and explicit: the overview's strip is
+                  // what the person chose to keep, never what the app guessed
+                  // they meant.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _Pick(
+                      icon: _pinned
+                          ? LucideIcons.bookmarkCheck
+                          : LucideIcons.bookmark,
+                      label: _pinned
+                          ? 'Pinned to the overview'
+                          : 'Pin to the overview',
+                      color: _pinned ? null : scheme.secondary,
+                      onTap: () => setState(() => _pinned = !_pinned),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
                   FilledButton(
                     onPressed: _valid ? _save : null,
                     child: Text(widget.existing == null ? 'Add' : 'Save'),
@@ -418,12 +461,19 @@ class _Pick extends StatelessWidget {
               children: [
                 Icon(icon, size: 15, color: accent),
                 const SizedBox(width: 7),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onSurface,
+                // Flexible, because a pill's label is whatever the person
+                // named their category — a long one has to ellipsize rather
+                // than push the row past its bounds.
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    ),
                   ),
                 ),
               ],

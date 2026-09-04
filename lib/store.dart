@@ -321,6 +321,85 @@ class Rule {
       );
 }
 
+/// A transaction the person has chosen to keep one tap away.
+///
+/// Curated, never inferred. Guessing at shortcuts from recent history sounds
+/// helpful and is not: two entries that differ only by account look identical
+/// on a chip, so the strip fills with apparent duplicates, and a row you
+/// happened to enter twice outranks the one you actually want. This is a thing
+/// you pin on purpose.
+class Shortcut {
+  Shortcut({
+    String? id,
+    required this.kind,
+    required this.amountMinor,
+    required this.categoryId,
+    required this.accountId,
+    this.toAccountId,
+    this.note = '',
+  }) : id = id ?? newId();
+
+  final String id;
+  TxKind kind;
+  int amountMinor;
+  String categoryId;
+  String accountId;
+  String? toAccountId;
+  String note;
+
+  /// The same shortcut, ignoring identity — so pinning a thing twice does not
+  /// leave two chips that cannot be told apart.
+  bool sameAs(Shortcut other) =>
+      kind == other.kind &&
+      amountMinor == other.amountMinor &&
+      categoryId == other.categoryId &&
+      accountId == other.accountId &&
+      toAccountId == other.toAccountId &&
+      note == other.note;
+
+  /// This shortcut as a transaction, dated today.
+  Txn toTxn() => Txn(
+        kind: kind,
+        amountMinor: amountMinor,
+        day: dayKey(today()),
+        categoryId: categoryId,
+        accountId: accountId,
+        toAccountId: kind == TxKind.transfer ? toAccountId : null,
+        note: note,
+      );
+
+  /// The shortcut [txn] would become if it were pinned.
+  factory Shortcut.of(Txn txn) => Shortcut(
+        kind: txn.kind,
+        amountMinor: txn.amountMinor,
+        categoryId: txn.categoryId,
+        accountId: txn.accountId,
+        toAccountId: txn.toAccountId,
+        note: txn.note,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind.name,
+        'amount': amountMinor,
+        'category': categoryId,
+        'account': accountId,
+        if (toAccountId != null) 'toAccount': toAccountId,
+        if (note.isNotEmpty) 'note': note,
+      };
+
+  factory Shortcut.fromJson(Map<String, dynamic> j) => Shortcut(
+        id: j['id'] as String?,
+        kind: TxKind.parse(j['kind'] as String?),
+        amountMinor: ((j['amount'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
+        categoryId: j['category'] as String? ?? '',
+        accountId: j['account'] as String? ?? '',
+        toAccountId: j['toAccount'] as String?,
+        note: j['note'] as String? ?? '',
+      );
+}
+
+
 // ── The store ───────────────────────────────────────────────────────────────
 
 /// The model, the store and the persistence layer, in one object.
@@ -333,6 +412,7 @@ class PennyStore extends ChangeNotifier {
   final List<Category> categories = [];
   final List<Account> accounts = [];
   final List<Rule> rules = [];
+  final List<Shortcut> shortcuts = [];
 
   ThemeMode themeMode = ThemeMode.light;
   bool onboarded = false;
@@ -385,6 +465,7 @@ class PennyStore extends ChangeNotifier {
     List<Category> categories,
     List<Txn> txns,
     List<Rule> rules,
+    List<Shortcut> shortcuts,
   }) _decode(String raw) {
     final doc = jsonDecode(raw) as Map<String, dynamic>;
     List<T> read<T>(String key, T Function(Map<String, dynamic>) from) =>
@@ -398,6 +479,7 @@ class PennyStore extends ChangeNotifier {
       categories: read('categories', Category.fromJson),
       txns: read('txns', Txn.fromJson),
       rules: read('rules', Rule.fromJson),
+      shortcuts: read('shortcuts', Shortcut.fromJson),
     );
   }
 
@@ -407,6 +489,7 @@ class PennyStore extends ChangeNotifier {
         List<Category> categories,
         List<Txn> txns,
         List<Rule> rules,
+        List<Shortcut> shortcuts,
       }) doc) {
     accounts
       ..clear()
@@ -420,6 +503,9 @@ class PennyStore extends ChangeNotifier {
     rules
       ..clear()
       ..addAll(doc.rules);
+    shortcuts
+      ..clear()
+      ..addAll(doc.shortcuts);
     _repair();
     _sort();
   }
@@ -473,6 +559,12 @@ class PennyStore extends ChangeNotifier {
 
     rules.removeWhere((r) =>
         !accountIds.contains(r.accountId) || !categoryIds.contains(r.categoryId));
+
+    // A shortcut is a convenience, not a record: one pointing at an account or
+    // category that no longer exists is dropped rather than adopted, because
+    // silently repointing it would spend from the wrong account on one tap.
+    shortcuts.removeWhere((s) =>
+        !accountIds.contains(s.accountId) || !categoryIds.contains(s.categoryId));
   }
 
   /// Newest first, and stable within a day by entry order — backdating a row
@@ -671,6 +763,34 @@ class PennyStore extends ChangeNotifier {
     _commit();
   }
 
+  /// Pin [shortcut], unless the same thing is already pinned. Returns whether
+  /// anything was added.
+  bool addShortcut(Shortcut shortcut) {
+    if (shortcuts.any((s) => s.sameAs(shortcut))) return false;
+    shortcuts.add(shortcut);
+    _commit();
+    return true;
+  }
+
+  void removeShortcut(Shortcut shortcut) {
+    shortcuts.removeWhere((s) => s.id == shortcut.id);
+    _commit();
+  }
+
+  void insertShortcutAt(int index, Shortcut shortcut) {
+    shortcuts.insert(index.clamp(0, shortcuts.length), shortcut);
+    _commit();
+  }
+
+  /// The pinned shortcut matching [txn], if there is one.
+  Shortcut? shortcutFor(Txn txn) {
+    final candidate = Shortcut.of(txn);
+    for (final s in shortcuts) {
+      if (s.sameAs(candidate)) return s;
+    }
+    return null;
+  }
+
   void removeRule(Rule r) {
     rules.removeWhere((x) => x.id == r.id);
     _commit();
@@ -706,6 +826,7 @@ class PennyStore extends ChangeNotifier {
         'categories': [for (final c in categories) c.toJson()],
         'txns': [for (final t in txns) t.toJson()],
         'rules': [for (final r in rules) r.toJson()],
+        'shortcuts': [for (final s in shortcuts) s.toJson()],
       });
 
   /// Replace everything with [raw]. Returns false and changes nothing if the
