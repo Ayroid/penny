@@ -3,7 +3,7 @@
 Working checklist for what's built, what's broken, and what's next. Tick a box
 when it ships. Keep entries one line; the reasoning lives in the code comments.
 
-**Status:** 17 source files · 6,156 lines · 205 tests · 11 goldens · 4 runtime deps
+**Status:** 17 source files · 6,162 lines · 205 tests · 11 goldens · 4 runtime deps
 **Verified on:** Android device — runs, rupee and mono render, data survives a cold kill
 **Last release:** none — no `key.properties`, so release builds fall back to debug keys
 **Current build:** arm64 **18.3 MB** (`tool/release.sh`, obfuscated + split-debug-info)
@@ -137,6 +137,7 @@ downloads.
 ### Shell
 - [x] Three swipeable pages under a floating tab pill
 - [x] Tab pill tracks the swipe fraction, not just the settled page
+- [x] Tab pill sits above the system gesture strip, not inside it
 - [x] Splash gate → onboarding or shell
 - [x] Recurring rules catch up on launch and on resume
 
@@ -201,7 +202,11 @@ downloads.
 - **No undo, anywhere.** The snackbars were removed on request and they carried
   every undo path. Deleting asks first; adding from a pinned chip does not,
   because the row lands at the top of RECENT where it can be opened and deleted.
-  If a mis-tap ever costs someone real work, this is the thing to fix.
+  If a mis-tap ever costs someone real work, this is the thing to fix. The
+  *model* is already there and unused: `removeTxn` returns the index it removed
+  from and `entry_sheet.dart` throws that away, and `insertTxnAt` has no caller
+  at all. What is missing is somewhere to put the offer, not the ability to
+  honour it.
 - **Recurring rules cannot be edited** — only added and stopped. Changing rent
   means stopping one rule and creating another.
 - **`showPennyMoment` and `claimMoment` are never called,** so `Penny.focus` and
