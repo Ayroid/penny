@@ -16,11 +16,19 @@ class SheetFrame extends StatelessWidget {
     required this.title,
     required this.children,
     this.action,
+    this.pinned,
   });
 
   final String title;
   final List<Widget> children;
   final Widget? action;
+
+  /// Buttons held at the bottom, outside the scroll.
+  ///
+  /// A sheet with a tall picker in it can outgrow the screen, and then the one
+  /// thing that has to stay reachable — Save — is the thing that scrolls away
+  /// first, behind a grid that eats the drag meant for the sheet.
+  final Widget? pinned;
 
   @override
   Widget build(BuildContext context) {
@@ -30,42 +38,62 @@ class SheetFrame extends StatelessWidget {
         top: false,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+            // Nine tenths rather than the old .85: the edit sheet carries a
+            // four-row icon grid now, and the strip of page left showing
+            // above it is still enough to read as a sheet.
+            maxHeight: MediaQuery.sizeOf(context).height * 0.9,
           ),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.outline,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      12,
+                      20,
+                      pinned == null ? 20 : 12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.outline,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                            ?action,
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        ...children,
+                      ],
                     ),
                   ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      ?action,
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  ...children,
-                ],
+                ),
               ),
-            ),
+              if (pinned != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: pinned,
+                ),
+            ],
           ),
         ),
       ),
@@ -207,6 +235,18 @@ class EditSheet extends StatelessWidget {
     return StatefulBuilder(
       builder: (context, setSheet) => SheetFrame(
         title: title,
+        pinned: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: nameController.text.trim().isEmpty ? null : onSave,
+              child: const Text('Save'),
+            ),
+            if (footer != null) const SizedBox(height: 10),
+            ?footer,
+          ],
+        ),
         children: [
           TextField(
             controller: nameController,
@@ -219,71 +259,38 @@ class EditSheet extends StatelessWidget {
           if (extra.isNotEmpty) ...[...extra, const SizedBox(height: 14)],
           Text('COLOUR', style: Theme.of(context).textTheme.labelSmall),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (var i = 0; i < catColors.length; i++)
-                Semantics(
-                  button: true,
-                  selected: i == colour,
-                  label: catColors[i].name,
-                  excludeSemantics: true,
-                  child: GestureDetector(
-                    onTap: () => onColour(i),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: catColors[i].value,
-                        shape: BoxShape.circle,
-                        border: i == colour
-                            ? Border.all(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                width: 2.5,
-                              )
-                            : null,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text('ICON', style: Theme.of(context).textTheme.labelSmall),
-          const SizedBox(height: 8),
+          // Two rows deep and scrolling past that: twenty-one swatches wrapped
+          // in full cost a third of the sheet, and that height belongs to the
+          // icon grid under them.
           SizedBox(
-            height: 168,
+            height: 68,
             child: SingleChildScrollView(
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final key in iconByKey.keys)
+                  for (var i = 0; i < catColors.length; i++)
                     Semantics(
                       button: true,
-                      selected: key == icon,
-                      label: key,
+                      selected: i == colour,
+                      label: catColors[i].name,
                       excludeSemantics: true,
                       child: GestureDetector(
-                        onTap: () => onIcon(key),
+                        onTap: () => onColour(i),
                         child: Container(
-                          width: 40,
-                          height: 40,
+                          width: 30,
+                          height: 30,
                           decoration: BoxDecoration(
-                            color: key == icon
-                                ? catColorAt(colour).withValues(alpha: 0.22)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            iconFor(key),
-                            size: 18,
-                            color: key == icon
-                                ? catColorAt(colour)
-                                : Theme.of(context).colorScheme.secondary,
+                            color: catColors[i].value,
+                            shape: BoxShape.circle,
+                            border: i == colour
+                                ? Border.all(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                    width: 2.5,
+                                  )
+                                : null,
                           ),
                         ),
                       ),
@@ -292,13 +299,10 @@ class EditSheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 18),
-          FilledButton(
-            onPressed: nameController.text.trim().isEmpty ? null : onSave,
-            child: const Text('Save'),
-          ),
-          if (footer != null) const SizedBox(height: 10),
-          ?footer,
+          const SizedBox(height: 16),
+          Text('ICON', style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 8),
+          _IconPicker(selected: icon, colour: colour, onPick: onIcon),
         ],
       ),
     );
@@ -364,6 +368,116 @@ class PickChip extends StatelessWidget {
   }
 }
 
+/// The icon grid, with the whole of Lucide behind a search box.
+///
+/// A grid rather than a `Wrap`, and lazily built: the shortlist is a few dozen
+/// icons but the list behind it is two thousand, and building all of them for
+/// a 168-high window is work nobody sees.
+class _IconPicker extends StatefulWidget {
+  const _IconPicker({
+    required this.selected,
+    required this.colour,
+    required this.onPick,
+  });
+
+  final String selected;
+  final int colour;
+  final ValueChanged<String> onPick;
+
+  @override
+  State<_IconPicker> createState() => _IconPickerState();
+}
+
+class _IconPickerState extends State<_IconPicker> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final q = _query.trim().toLowerCase();
+    // Lucide's names are the search index — they are kebab-case, so a space
+    // typed between words still finds `piggy-bank`.
+    final needle = q.replaceAll(' ', '-');
+    final keys = needle.isEmpty
+        ? iconKeys
+        : [
+            for (final k in iconKeys)
+              if (k.contains(needle)) k,
+          ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          onChanged: (v) => setState(() => _query = v),
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Search ${iconKeys.length} icons',
+            prefixIcon: Icon(
+              LucideIcons.search,
+              size: 16,
+              color: scheme.secondary,
+            ),
+            prefixIconConstraints: const BoxConstraints(minWidth: 38),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          // Three rows, whatever the width: a cell is 48 at its widest and the
+          // gaps are 8, so 3 x 48 + 2 x 8 is the tallest three rows can be.
+          height: 160,
+          child: keys.isEmpty
+              ? Center(
+                  child: Text(
+                    'No icon called "$_query"',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                )
+              : GridView.builder(
+                  padding: EdgeInsets.zero,
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 48,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                  ),
+                  itemCount: keys.length,
+                  itemBuilder: (context, i) {
+                    final key = keys[i];
+                    final picked = key == widget.selected;
+                    return Semantics(
+                      button: true,
+                      selected: picked,
+                      label: key,
+                      excludeSemantics: true,
+                      child: GestureDetector(
+                        onTap: () => widget.onPick(key),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: picked
+                                ? catColorAt(
+                                    widget.colour,
+                                  ).withValues(alpha: 0.22)
+                                : scheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            iconFor(key),
+                            size: 18,
+                            color: picked
+                                ? catColorAt(widget.colour)
+                                : scheme.secondary,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 /// A rupee amount, typed on the platform's numeric keyboard.
 ///
 /// Rupees with an optional decimal, the way the field's own ₹ implies — this
@@ -375,11 +489,15 @@ class AmountField extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.positiveOnly = false,
+    this.trailing,
   });
 
   final int value;
   final ValueChanged<int> onChanged;
   final bool positiveOnly;
+
+  /// Sits at the right end of the field — a warning about the amount, say.
+  final Widget? trailing;
 
   @override
   State<AmountField> createState() => _AmountFieldState();
@@ -427,7 +545,15 @@ class _AmountFieldState extends State<AmountField> {
             // No helper line echoing the figure back: the field already shows
             // it, with the ₹ in front, and a second formatted copy underneath
             // is one more thing to read on a sheet that is mostly reading.
-            decoration: InputDecoration(hintText: '0', prefixText: '$rupee '),
+            decoration: InputDecoration(
+              hintText: '0',
+              prefixText: '$rupee ',
+              // Inside the field's own ground rather than beside it: the note
+              // is about this number, and a row that grows a widget when
+              // something is wrong shoves the whole sheet down.
+              suffixIcon: widget.trailing,
+              suffixIconConstraints: const BoxConstraints(minWidth: 40),
+            ),
           ),
         ),
       ],

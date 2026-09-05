@@ -7,7 +7,6 @@ import 'onboarding.dart';
 import 'page_bar.dart';
 import 'penny.dart';
 import 'recurring.dart';
-import 'settings.dart';
 import 'store.dart';
 import 'theme.dart';
 
@@ -128,6 +127,10 @@ class _RootScreenState extends State<RootScreen> {
   /// of cards and a heatmap.
   final _position = ValueNotifier<double>(0);
 
+  /// The page that has *landed*. The bar's title changes on this rather than
+  /// on [_position], so a swipe does not recount the ledger on every frame.
+  final _page = ValueNotifier<int>(0);
+
   @override
   void initState() {
     super.initState();
@@ -137,7 +140,9 @@ class _RootScreenState extends State<RootScreen> {
       // and Dart's `clamp` propagates NaN rather than clamping it, so the pill
       // lays out at a nonsense width. Hold the last good value instead.
       final page = _pages.hasClients ? _pages.page : null;
-      if (page != null && !page.isNaN) _position.value = page;
+      if (page == null || page.isNaN) return;
+      _position.value = page;
+      _page.value = page.round();
     });
   }
 
@@ -145,6 +150,7 @@ class _RootScreenState extends State<RootScreen> {
   void dispose() {
     _pages.dispose();
     _position.dispose();
+    _page.dispose();
     super.dispose();
   }
 
@@ -152,28 +158,49 @@ class _RootScreenState extends State<RootScreen> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: widget.store,
-      builder: (context, _) => Stack(
-        children: [
-          PageView(
-            controller: _pages,
+      // A `Material` rather than a `Scaffold`: the pages inside bring their
+      // own, and a second one out here takes the snackbars — which then no
+      // longer lift clear of the page's add button, because this one has no
+      // button on it. All the shell needs from a Scaffold is a ground to paint
+      // and an ink surface for the bar's buttons.
+      builder: (context, _) => Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: SafeArea(
+          bottom: false,
+          child: Column(
             children: [
-              HomePage(
-                store: widget.store,
-                onSettings: () => openSettings(context, widget.store),
+              // One bar over all three pages, rebuilt when a swipe lands
+              // rather than with the drag.
+              ValueListenableBuilder<int>(
+                valueListenable: _page,
+                builder: (context, page, _) =>
+                    ShellBar(store: widget.store, page: page),
               ),
-              LedgerPage(store: widget.store),
-              GoalsPage(store: widget.store),
+              Expanded(
+                child: Stack(
+                  children: [
+                    PageView(
+                      controller: _pages,
+                      children: [
+                        HomePage(store: widget.store),
+                        LedgerPage(store: widget.store),
+                        GoalsPage(store: widget.store),
+                      ],
+                    ),
+                    PageTabs(
+                      position: _position,
+                      onSelect: (i) => _pages.animateToPage(
+                        i,
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOut,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          PageTabs(
-            position: _position,
-            onSelect: (i) => _pages.animateToPage(
-              i,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

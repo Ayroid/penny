@@ -6,6 +6,7 @@ import 'package:penny/analytics.dart';
 import 'package:penny/clock.dart';
 import 'package:penny/home.dart';
 import 'package:penny/ledger_screen.dart';
+import 'package:penny/page_bar.dart';
 import 'package:penny/store.dart';
 import 'package:penny/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,26 +15,32 @@ Future<PennyStore> seeded() async {
   final store = PennyStore();
   await store.load();
   store.seedDefaults();
-  store.addTxn(Txn(
+  store.addTxn(
+    Txn(
       kind: TxKind.expense,
       amountMinor: 45000,
       day: dayKey(today()),
       categoryId: store.categoriesOf(TxKind.expense).first.id,
       accountId: store.accounts.first.id,
-      note: 'lunch'));
-  store.addTxn(Txn(
+      note: 'lunch',
+    ),
+  );
+  store.addTxn(
+    Txn(
       kind: TxKind.income,
       amountMinor: 8500000,
       day: dayKey(today()),
       categoryId: store.categoriesOf(TxKind.income).first.id,
-      accountId: store.accounts[1].id));
+      accountId: store.accounts[1].id,
+    ),
+  );
   return store;
 }
 
 Widget wrap(Widget child, {bool dark = false}) => MaterialApp(
-      theme: appTheme(dark: dark),
-      home: child,
-    );
+  theme: appTheme(dark: dark),
+  home: child,
+);
 
 void main() {
   late DateTime Function() previousClock;
@@ -45,17 +52,12 @@ void main() {
 
   testWidgets('every icon-only control names itself', (tester) async {
     final store = await seeded();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(wrap(HomePage(store: store)));
     await tester.pumpAndSettle();
 
     // An icon button with no label is a mystery to a screen reader and has no
     // tooltip for anyone else either.
-    for (final tooltip in [
-      'Settings',
-      'Insights',
-      'Previous month',
-      'Next month',
-    ]) {
+    for (final tooltip in ['Previous month', 'Next month']) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
       expect(find.bySemanticsLabel(tooltip), findsWidgets, reason: tooltip);
     }
@@ -65,11 +67,22 @@ void main() {
     // quick entries out instead.
     expect(find.byTooltip('Add a transaction'), findsNothing);
     expect(find.bySemanticsLabel('Add a transaction'), findsWidgets);
+
+    // Settings and Insights live on the shell's bar now, above all three
+    // pages rather than on this one.
+    await tester.pumpWidget(
+      wrap(Scaffold(body: ShellBar(store: store, page: 0))),
+    );
+    await tester.pumpAndSettle();
+    for (final tooltip in ['Settings', 'Insights']) {
+      expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
+      expect(find.bySemanticsLabel(tooltip), findsWidgets, reason: tooltip);
+    }
   });
 
   testWidgets('tap targets are never below 48', (tester) async {
     final store = await seeded();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(wrap(HomePage(store: store)));
     await tester.pumpAndSettle();
 
     final handle = tester.ensureSemantics();
@@ -91,49 +104,69 @@ void main() {
   //
   // What is worth pinning here is that the widget actually uses the colours
   // palette_test blessed, so the two files cannot drift apart.
-  testWidgets('the selected pill uses the measured ink, and travels',
-      (tester) async {
+  testWidgets('the selected pill uses the measured ink, and travels', (
+    tester,
+  ) async {
     final store = await seeded();
     for (final dark in [false, true]) {
-      await tester.pumpWidget(
-          wrap(HomePage(store: store, onSettings: () {}), dark: dark));
+      await tester.pumpWidget(wrap(HomePage(store: store), dark: dark));
       await tester.pumpAndSettle();
 
       final segmented = find.byType(Segmented<Period>);
 
       TextStyle labelStyle(String label) => tester
-          .widget<AnimatedDefaultTextStyle>(find.ancestor(
-            of: find.text(label),
-            matching: find.descendant(
-                of: segmented, matching: find.byType(AnimatedDefaultTextStyle)),
-          ))
+          .widget<AnimatedDefaultTextStyle>(
+            find.ancestor(
+              of: find.text(label),
+              matching: find.descendant(
+                of: segmented,
+                matching: find.byType(AnimatedDefaultTextStyle),
+              ),
+            ),
+          )
           .style;
 
-      expect(labelStyle('Month').color, navy,
-          reason: 'white on the sprout measures 2.57 and must never appear');
-      expect(labelStyle('Month').fontWeight, FontWeight.w700,
-          reason: 'weight carries the selection when colour cannot');
+      expect(
+        labelStyle('Month').color,
+        navy,
+        reason: 'white on the sprout measures 2.57 and must never appear',
+      );
+      expect(
+        labelStyle('Month').fontWeight,
+        FontWeight.w700,
+        reason: 'weight carries the selection when colour cannot',
+      );
 
       // The pill sits over the selected segment rather than each segment
       // fading its own background: three of three, so hard right.
-      Alignment pillAt() => tester
-          .widget<AnimatedAlign>(
-              find.descendant(of: segmented, matching: find.byType(AnimatedAlign)))
-          .alignment as Alignment;
+      Alignment pillAt() =>
+          tester
+                  .widget<AnimatedAlign>(
+                    find.descendant(
+                      of: segmented,
+                      matching: find.byType(AnimatedAlign),
+                    ),
+                  )
+                  .alignment
+              as Alignment;
       expect(pillAt(), const Alignment(1, 0));
 
       await tester.tap(find.text('Day'));
       await tester.pumpAndSettle();
-      expect(pillAt(), const Alignment(-1, 0),
-          reason: 'the pill travels to the new selection');
+      expect(
+        pillAt(),
+        const Alignment(-1, 0),
+        reason: 'the pill travels to the new selection',
+      );
 
       await tester.tap(find.text('Month'));
       await tester.pumpAndSettle();
     }
   });
 
-  testWidgets('a transaction announces itself as one thing, not five',
-      (tester) async {
+  testWidgets('a transaction announces itself as one thing, not five', (
+    tester,
+  ) async {
     final store = await seeded();
     await tester.pumpWidget(wrap(LedgerPage(store: store)));
     await tester.pumpAndSettle();
@@ -142,34 +175,40 @@ void main() {
     // amount and the note — rather than a screen reader reading out an icon,
     // two labels and two numbers as separate stops.
     expect(
-      find.bySemanticsLabel(
-          RegExp(r'Food & Drink, -₹450\.00, Cash · lunch')),
+      find.bySemanticsLabel(RegExp(r'Food & Drink, -₹450\.00, Cash · lunch')),
       findsOneWidget,
     );
   });
 
   testWidgets('a heatmap cell says what it is worth', (tester) async {
     final store = await seeded();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(wrap(HomePage(store: store)));
     await tester.pumpAndSettle();
 
     // Colour is never the only signal: the shade encodes the amount, and the
     // semantics carry the same figure in words.
     expect(find.bySemanticsLabel(RegExp(r'Day 17, ₹450\.00')), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp(r'Day 1, nothing spent')),
-        findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp(r'Day 1, nothing spent')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the selected period is announced as selected', (tester) async {
     final store = await seeded();
-    await tester.pumpWidget(wrap(HomePage(store: store, onSettings: () {})));
+    await tester.pumpWidget(wrap(HomePage(store: store)));
     await tester.pumpAndSettle();
 
     final handle = tester.ensureSemantics();
     final node = tester.getSemantics(find.bySemanticsLabel('Month'));
     expect(node.flagsCollection.isSelected, Tristate.isTrue);
-    expect(tester.getSemantics(find.bySemanticsLabel('Week'))
-        .flagsCollection.isSelected, Tristate.isFalse);
+    expect(
+      tester
+          .getSemantics(find.bySemanticsLabel('Week'))
+          .flagsCollection
+          .isSelected,
+      Tristate.isFalse,
+    );
     handle.dispose();
   });
 }

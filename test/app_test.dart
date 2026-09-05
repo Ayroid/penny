@@ -52,7 +52,7 @@ Future<void> scrollToRows(WidgetTester tester) async {
 Widget home(PennyStore store, {bool dark = false}) => wrap(
   ListenableBuilder(
     listenable: store,
-    builder: (context, _) => HomePage(store: store, onSettings: () {}),
+    builder: (context, _) => HomePage(store: store),
   ),
   dark: dark,
 );
@@ -216,7 +216,6 @@ void main() {
     expect(find.text('YESTERDAY'), findsOneWidget);
     expect(find.text('+₹80,000.00'), findsOneWidget);
     expect(find.text('-₹450.00'), findsOneWidget);
-    expect(find.text('2 entries'), findsOneWidget);
   });
 
   testWidgets('search narrows the ledger', (tester) async {
@@ -237,11 +236,9 @@ void main() {
 
     await tester.pumpWidget(wrap(LedgerPage(store: store)));
     await tester.pumpAndSettle();
-    expect(find.text('2 entries'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'petrol');
     await tester.pumpAndSettle();
-    expect(find.text('1 of 2'), findsOneWidget);
     expect(find.text('-₹2,000.00'), findsOneWidget);
     expect(find.text('-₹450.00'), findsNothing);
   });
@@ -297,7 +294,7 @@ void main() {
     );
 
     for (final page in [
-      HomePage(store: store, onSettings: () {}),
+      HomePage(store: store),
       LedgerPage(store: store),
       InsightsPage(store: store),
     ]) {
@@ -353,28 +350,39 @@ void main() {
       // fading their own background — what this replaced — puts no box at full
       // accent anywhere mid-swipe, and two of them half lit.
       final accent = sproutOf(tester.element(find.byType(PageTabs)));
-      Rect litPill() => tester.getRect(find.descendant(
-            of: find.byType(PageTabs),
-            matching: find.byWidgetPredicate((w) =>
+      Rect litPill() => tester.getRect(
+        find.descendant(
+          of: find.byType(PageTabs),
+          matching: find.byWidgetPredicate(
+            (w) =>
                 w is DecoratedBox &&
                 w.decoration is BoxDecoration &&
-                (w.decoration as BoxDecoration).color == accent),
-          ));
+                (w.decoration as BoxDecoration).color == accent,
+          ),
+        ),
+      );
 
       final onOverview = litPill();
 
-      final drag =
-          await tester.startGesture(tester.getCenter(find.byType(PageView)));
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byType(PageView)),
+      );
       await drag.moveBy(const Offset(-30, 0)); // past the touch slop
       await tester.pump();
       await drag.moveBy(const Offset(-150, 0));
       await tester.pump();
 
       final midSwipe = litPill();
-      expect(midSwipe.left, greaterThan(onOverview.left),
-          reason: 'the pill moves with the finger, not once the page lands');
-      expect(midSwipe.width, closeTo(onOverview.width, 0.5),
-          reason: 'one pill travelling, not one shrinking while another grows');
+      expect(
+        midSwipe.left,
+        greaterThan(onOverview.left),
+        reason: 'the pill moves with the finger, not once the page lands',
+      );
+      expect(
+        midSwipe.width,
+        closeTo(onOverview.width, 0.5),
+        reason: 'one pill travelling, not one shrinking while another grows',
+      );
 
       // Let go short of the halfway mark and the page comes back, and so does
       // the pill: it is the page's own offset, not a selection of its own.
@@ -532,8 +540,9 @@ void main() {
       expect(find.bySemanticsLabel('Add Food & Drink, ₹20'), findsOneWidget);
     });
 
-    testWidgets('the row stays inside the screen, and survives a hover',
-        (tester) async {
+    testWidgets('the row stays inside the screen, and survives a hover', (
+      tester,
+    ) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
@@ -551,9 +560,11 @@ void main() {
         tester.getRect(find.bySemanticsLabel('Add Food & Drink, ₹13,000')),
         tester.getRect(find.bySemanticsLabel('Add Food & Drink, ₹32')),
       ];
-      expect(chips.map((c) => c.right).reduce((a, b) => a > b ? a : b),
-          button.right,
-          reason: 'flush with the button, never off the edge beside it');
+      expect(
+        chips.map((c) => c.right).reduce((a, b) => a > b ? a : b),
+        button.right,
+        reason: 'flush with the button, never off the edge beside it',
+      );
       for (final chip in chips) {
         expect(chip.left, greaterThanOrEqualTo(16.0));
         expect(chip.bottom, lessThanOrEqualTo(button.top));
@@ -646,12 +657,15 @@ void main() {
     testWidgets('the eye masks the total and every account', (tester) async {
       phone(tester);
       final store = await emptyStore();
-      store.addTxn(Txn(
+      store.addTxn(
+        Txn(
           kind: TxKind.income,
           amountMinor: 8500000,
           day: dayKey(today()),
           categoryId: store.categoriesOf(TxKind.income).first.id,
-          accountId: store.accounts.first.id));
+          accountId: store.accounts.first.id,
+        ),
+      );
 
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
@@ -668,25 +682,32 @@ void main() {
       expect(find.text('Cash  $maskedAmount'), findsOneWidget);
     });
 
-    testWidgets('nothing below the balance moves when it is hidden',
-        (tester) async {
+    testWidgets('nothing below the balance moves when it is hidden', (
+      tester,
+    ) async {
       phone(tester);
       final store = await emptyStore();
       // Amounts wide enough that the account chips have a real layout to
       // disturb — a mask is a different width from a number, and if that
       // reflows the Wrap the whole screen jumps.
-      store.addTxn(Txn(
+      store.addTxn(
+        Txn(
           kind: TxKind.income,
           amountMinor: 8500000,
           day: dayKey(today()),
           categoryId: store.categoriesOf(TxKind.income).first.id,
-          accountId: store.accounts[1].id));
-      store.addTxn(Txn(
+          accountId: store.accounts[1].id,
+        ),
+      );
+      store.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 1849900,
           day: dayKey(today()),
           categoryId: store.categoriesOf(TxKind.expense).first.id,
-          accountId: store.accounts.first.id));
+          accountId: store.accounts.first.id,
+        ),
+      );
 
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
@@ -696,11 +717,16 @@ void main() {
       await tester.tap(find.byTooltip('Hide amounts'));
       await tester.pumpAndSettle();
 
-      expect(tester.getSize(find.byType(TintCard).first).height,
-          shownCard.height,
-          reason: 'the balance card changed height');
-      expect(tester.getTopLeft(find.text('CREDIT')).dy, shownBelow,
-          reason: 'everything below the balance card moved');
+      expect(
+        tester.getSize(find.byType(TintCard).first).height,
+        shownCard.height,
+        reason: 'the balance card changed height',
+      );
+      expect(
+        tester.getTopLeft(find.text('CREDIT')).dy,
+        shownBelow,
+        reason: 'everything below the balance card moved',
+      );
     });
 
     testWidgets('it is one tap back', (tester) async {
@@ -718,8 +744,7 @@ void main() {
       expect(find.text('••••••'), findsNothing);
     });
 
-    testWidgets('the mask does not leak how big the number is',
-        (tester) async {
+    testWidgets('the mask does not leak how big the number is', (tester) async {
       phone(tester);
       final small = await emptyStore();
       await tester.pumpWidget(home(small));
@@ -733,23 +758,31 @@ void main() {
       expect(masked, '••••••');
     });
 
-    testWidgets('the ledger is masked too, not just the overview',
-        (tester) async {
+    testWidgets('the ledger is masked too, not just the overview', (
+      tester,
+    ) async {
       phone(tester);
       final store = await emptyStore();
-      store.addTxn(Txn(
+      store.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 45000,
           day: dayKey(today()),
           categoryId: store.categoriesOf(TxKind.expense).first.id,
           accountId: store.accounts.first.id,
-          note: 'lunch'));
+          note: 'lunch',
+        ),
+      );
       await store.setHideAmounts(true);
 
-      await tester.pumpWidget(wrap(ListenableBuilder(
-        listenable: store,
-        builder: (context, _) => LedgerPage(store: store),
-      )));
+      await tester.pumpWidget(
+        wrap(
+          ListenableBuilder(
+            listenable: store,
+            builder: (context, _) => LedgerPage(store: store),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Every figure on the screen: the row, its running balance and the day's
@@ -770,20 +803,26 @@ void main() {
 
     final next = PennyStore();
     await next.load();
-    expect(next.hideAmounts, isTrue,
-        reason: 'having to hide it again every launch is why people stop');
+    expect(
+      next.hideAmounts,
+      isTrue,
+      reason: 'having to hide it again every launch is why people stop',
+    );
   });
 
   group('deleting an entry', () {
     Future<PennyStore> withOne(WidgetTester tester) async {
       final store = await emptyStore();
-      store.addTxn(Txn(
+      store.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 45000,
           day: dayKey(today()),
           categoryId: store.categoriesOf(TxKind.expense).first.id,
           accountId: store.accounts.first.id,
-          note: 'lunch'));
+          note: 'lunch',
+        ),
+      );
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
       await scrollToRows(tester);
@@ -841,13 +880,16 @@ void main() {
       // Three on one day, so undoing the middle one has somewhere wrong to
       // land: appended, it would come back at the bottom of its own day.
       for (final note in ['bus', 'lunch', 'chai']) {
-        store.addTxn(Txn(
+        store.addTxn(
+          Txn(
             kind: TxKind.expense,
             amountMinor: 45000,
             day: dayKey(today()),
             categoryId: category,
             accountId: account,
-            note: note));
+            note: note,
+          ),
+        );
       }
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
@@ -867,8 +909,9 @@ void main() {
       expect(store.txns.map((t) => t.note), ['chai', 'lunch', 'bus']);
     });
 
-    testWidgets('the question no longer claims it cannot be undone',
-        (tester) async {
+    testWidgets('the question no longer claims it cannot be undone', (
+      tester,
+    ) async {
       phone(tester);
       await withOne(tester);
 
@@ -881,17 +924,21 @@ void main() {
   });
 
   group('recurring rules', () {
-    testWidgets('a rule is edited in place, not stopped and rebuilt',
-        (tester) async {
+    testWidgets('a rule is edited in place, not stopped and rebuilt', (
+      tester,
+    ) async {
       phone(tester);
       final store = await emptyStore();
-      store.addRule(Rule(
+      store.addRule(
+        Rule(
           kind: TxKind.expense,
           amountMinor: 1200000,
           categoryId: store.categoriesOf(TxKind.expense).first.id,
           accountId: store.accounts.first.id,
           note: 'Rent',
-          startDay: dayKey(today())));
+          startDay: dayKey(today()),
+        ),
+      );
 
       await tester.pumpWidget(wrap(SettingsScreen(store: store)));
       await tester.pumpAndSettle();
@@ -925,12 +972,15 @@ void main() {
       // current week only if today is late enough in it — so anchor on the
       // week's own Monday instead.
       for (final offset in [0, 1]) {
-        store.addTxn(Txn(
+        store.addTxn(
+          Txn(
             kind: TxKind.expense,
             amountMinor: 45000 * (offset + 1),
             day: dayKey(shiftDays(startOfWeek(today()), offset)),
             categoryId: food,
-            accountId: cash));
+            accountId: cash,
+          ),
+        );
       }
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
@@ -948,8 +998,11 @@ void main() {
       final monday = startOfWeek(today());
       for (var i = 0; i < 7; i++) {
         final d = shiftDays(monday, i);
-        expect(find.bySemanticsLabel(RegExp('^Day ${d.day}\\b')), findsOneWidget,
-            reason: 'day ${d.day} of the week is missing');
+        expect(
+          find.bySemanticsLabel(RegExp('^Day ${d.day}\\b')),
+          findsOneWidget,
+          reason: 'day ${d.day} of the week is missing',
+        );
       }
     });
 
@@ -980,12 +1033,15 @@ void main() {
     final cash = store.accounts.first.id;
     final food = store.categoriesOf(TxKind.expense).first.id;
     for (final offset in [0, 0, 1, 2]) {
-      store.addTxn(Txn(
+      store.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 45000,
           day: dayKey(shiftDays(today(), -offset)),
           categoryId: food,
-          accountId: cash));
+          accountId: cash,
+        ),
+      );
     }
 
     await tester.pumpWidget(home(store));
@@ -996,7 +1052,10 @@ void main() {
     // things on different screens.
     expect(find.text('TODAY'), findsOneWidget);
     expect(find.text('YESTERDAY'), findsOneWidget);
-    expect(find.text(dayHeader(dayKey(shiftDays(today(), -2)))), findsOneWidget);
+    expect(
+      find.text(dayHeader(dayKey(shiftDays(today(), -2)))),
+      findsOneWidget,
+    );
 
     // One header for the day with two entries on it, not two.
     expect(find.byType(TxnRow), findsNWidgets(4));

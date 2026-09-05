@@ -10,6 +10,7 @@ import 'package:penny/goals_screen.dart';
 import 'package:penny/home.dart';
 import 'package:penny/ledger_screen.dart';
 import 'package:penny/onboarding.dart';
+import 'package:penny/page_bar.dart';
 import 'package:penny/settings.dart';
 import 'package:penny/store.dart';
 import 'package:penny/theme.dart';
@@ -35,8 +36,8 @@ Future<void> loadFonts() async {
   // Lucide ships its font inside the package, so this path is as reproducible
   // as the dependency itself.
   final lucide = Directory(
-          '${File(Platform.resolvedExecutable).parent.path}/../..')
-      .path;
+    '${File(Platform.resolvedExecutable).parent.path}/../..',
+  ).path;
   for (final candidate in [
     '${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev/lucide_icons_flutter-3.1.17/assets/lucide.ttf',
     '$lucide/lucide.ttf',
@@ -75,25 +76,34 @@ Future<PennyStore> seeded() async {
   final cash = store.accounts[0].id;
   final bank = store.accounts[1].id;
   final expense = {
-    for (final c in store.categoriesOf(TxKind.expense)) c.name: c.id
+    for (final c in store.categoriesOf(TxKind.expense)) c.name: c.id,
   };
   final income = {
-    for (final c in store.categoriesOf(TxKind.income)) c.name: c.id
+    for (final c in store.categoriesOf(TxKind.income)) c.name: c.id,
   };
 
   store.accountById(bank)!.openingBalanceMinor = 4200000;
   store.accountById(cash)!.openingBalanceMinor = 350000;
 
-  void add(TxKind kind, int amount, int dayOffset, String category,
-      {String note = ''}) {
-    store.addTxn(Txn(
-      kind: kind,
-      amountMinor: amount,
-      day: dayKey(shiftDays(today(), -dayOffset)),
-      categoryId: kind == TxKind.income ? income[category]! : expense[category]!,
-      accountId: kind == TxKind.income ? bank : cash,
-      note: note,
-    ));
+  void add(
+    TxKind kind,
+    int amount,
+    int dayOffset,
+    String category, {
+    String note = '',
+  }) {
+    store.addTxn(
+      Txn(
+        kind: kind,
+        amountMinor: amount,
+        day: dayKey(shiftDays(today(), -dayOffset)),
+        categoryId: kind == TxKind.income
+            ? income[category]!
+            : expense[category]!,
+        accountId: kind == TxKind.income ? bank : cash,
+        note: note,
+      ),
+    );
   }
 
   add(TxKind.income, 8500000, 16, 'Salary', note: 'September');
@@ -105,15 +115,17 @@ Future<PennyStore> seeded() async {
   add(TxKind.expense, 240000, 3, 'Shopping');
   add(TxKind.expense, 45000, 1, 'Food & Drink', note: 'lunch');
   add(TxKind.expense, 62000, 0, 'Groceries', note: 'milk and eggs');
-  store.addTxn(Txn(
-    kind: TxKind.transfer,
-    amountMinor: 1000000,
-    day: dayKey(shiftDays(today(), -7)),
-    categoryId: expense['Other']!,
-    accountId: bank,
-    toAccountId: cash,
-    note: 'ATM',
-  ));
+  store.addTxn(
+    Txn(
+      kind: TxKind.transfer,
+      amountMinor: 1000000,
+      day: dayKey(shiftDays(today(), -7)),
+      categoryId: expense['Other']!,
+      accountId: bank,
+      toAccountId: cash,
+      note: 'ATM',
+    ),
+  );
 
   return store;
 }
@@ -128,7 +140,8 @@ Future<PennyStore> seeded() async {
 /// run, so the fix is to give them a moment there and then repaint.
 Future<void> settleImages(WidgetTester tester) async {
   await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 60)));
+    () => Future<void>.delayed(const Duration(milliseconds: 60)),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -144,11 +157,13 @@ Future<void> shot(
     ..devicePixelRatio = 3.0;
   addTearDown(tester.view.reset);
 
-  await tester.pumpWidget(MaterialApp(
-    debugShowCheckedModeBanner: false,
-    theme: appTheme(dark: dark),
-    home: child,
-  ));
+  await tester.pumpWidget(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: appTheme(dark: dark),
+      home: child,
+    ),
+  );
   await tester.pumpAndSettle();
   await settleImages(tester);
 
@@ -157,6 +172,22 @@ Future<void> shot(
     matchesGoldenFile('goldens/$name.png'),
   );
 }
+
+/// A tab page the way the shell actually draws it: the one bar above it.
+///
+/// The bar left the pages when it moved to the shell, and a golden of a tab
+/// page without it is a picture of a screen nobody sees.
+Widget shell(PennyStore store, int page, Widget child) => Scaffold(
+  body: SafeArea(
+    bottom: false,
+    child: Column(
+      children: [
+        ShellBar(store: store, page: page),
+        Expanded(child: child),
+      ],
+    ),
+  ),
+);
 
 /// Mid-month, mid-morning. Every screen renders a date or a greeting, so
 /// without a pinned clock these images fail the next day.
@@ -173,8 +204,8 @@ void main() {
   tearDown(() => clock = previousClock);
 
   testWidgets('overview', (tester) async {
-    await shot(
-        tester, 'overview', HomePage(store: await seeded(), onSettings: () {}));
+    final store = await seeded();
+    await shot(tester, 'overview', shell(store, 0, HomePage(store: store)));
   });
 
   // The quick entries, held open. The row paints over the page and only ever
@@ -203,7 +234,7 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: appTheme(dark: false),
-        home: HomePage(store: store, onSettings: () {}),
+        home: shell(store, 0, HomePage(store: store)),
       ),
     );
     await tester.pumpAndSettle();
@@ -219,9 +250,13 @@ void main() {
   });
 
   testWidgets('overview dark', (tester) async {
-    await shot(tester, 'overview_dark',
-        HomePage(store: await seeded(), onSettings: () {}),
-        dark: true);
+    final darkStore = await seeded();
+    await shot(
+      tester,
+      'overview_dark',
+      shell(darkStore, 0, HomePage(store: darkStore)),
+      dark: true,
+    );
   });
 
   testWidgets('overview week', (tester) async {
@@ -231,18 +266,22 @@ void main() {
       ..devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: appTheme(dark: false),
-      home: HomePage(store: store, onSettings: () {}),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: appTheme(dark: false),
+        home: shell(store, 0, HomePage(store: store)),
+      ),
+    );
     await tester.pumpAndSettle();
     await settleImages(tester);
     await tester.tap(find.text('Week'));
     await tester.pumpAndSettle();
 
-    await expectLater(find.byType(MaterialApp),
-        matchesGoldenFile('goldens/overview_week.png'));
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/overview_week.png'),
+    );
   });
 
   testWidgets('overview empty', (tester) async {
@@ -250,16 +289,25 @@ void main() {
     await store.load();
     store.seedDefaults();
     await shot(
-        tester, 'overview_empty', HomePage(store: store, onSettings: () {}));
+      tester,
+      'overview_empty',
+      shell(store, 0, HomePage(store: store)),
+    );
   });
 
   testWidgets('ledger', (tester) async {
-    await shot(tester, 'ledger', LedgerPage(store: await seeded()));
+    final store = await seeded();
+    await shot(tester, 'ledger', shell(store, 1, LedgerPage(store: store)));
   });
 
   testWidgets('ledger dark', (tester) async {
-    await shot(tester, 'ledger_dark', LedgerPage(store: await seeded()),
-        dark: true);
+    final darkStore = await seeded();
+    await shot(
+      tester,
+      'ledger_dark',
+      shell(darkStore, 1, LedgerPage(store: darkStore)),
+      dark: true,
+    );
   });
 
   testWidgets('insights', (tester) async {
@@ -267,8 +315,12 @@ void main() {
   });
 
   testWidgets('insights dark', (tester) async {
-    await shot(tester, 'insights_dark', InsightsPage(store: await seeded()),
-        dark: true);
+    await shot(
+      tester,
+      'insights_dark',
+      InsightsPage(store: await seeded()),
+      dark: true,
+    );
   });
 
   testWidgets('goals', (tester) async {
@@ -278,9 +330,10 @@ void main() {
     store
       ..addGoal(phone)
       ..addGoal(trip);
+    store.accounts[1].openingBalanceMinor += 4000000;
     store.putAside(phone, 1800000, store.accounts[1].id);
     store.putAside(trip, 1200000, store.accounts[1].id);
-    await shot(tester, 'goals', GoalsPage(store: store));
+    await shot(tester, 'goals', shell(store, 2, GoalsPage(store: store)));
   });
 
   /// The empty state is the one screen that draws `Penny.focus`, the pose that
@@ -289,7 +342,7 @@ void main() {
     final store = PennyStore();
     await store.load();
     store.seedDefaults();
-    await shot(tester, 'goals_empty', GoalsPage(store: store));
+    await shot(tester, 'goals_empty', shell(store, 2, GoalsPage(store: store)));
   });
 
   testWidgets('settings', (tester) async {
@@ -303,26 +356,30 @@ void main() {
       ..devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: appTheme(dark: false),
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: TextButton(
-              onPressed: () => showEntrySheet(context, store),
-              child: const Text('open'),
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: appTheme(dark: false),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () => showEntrySheet(context, store),
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     await settleImages(tester);
 
     await expectLater(
-        find.byType(MaterialApp), matchesGoldenFile('goldens/entry_sheet.png'));
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/entry_sheet.png'),
+    );
   });
 
   testWidgets('onboarding', (tester) async {

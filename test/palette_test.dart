@@ -9,8 +9,8 @@ Color over(Color fg, double alpha, Color bg) =>
 /// What `onAccent()` computes, without a BuildContext.
 Color onAccentOf(Color accent) =>
     contrastBetween(navy, accent) >= contrastBetween(Colors.white, accent)
-        ? navy
-        : Colors.white;
+    ? navy
+    : Colors.white;
 
 void main() {
   group('the brand accent', () {
@@ -74,8 +74,10 @@ void main() {
     // bar is never the only signal: every bar carries its amount as text and
     // sits against a labelled axis. Dark mode has no such collision.
     test('a sprout bar is a documented exception on cream', () {
-      expect(contrastBetween(sprout, warmBg),
-          allOf(greaterThanOrEqualTo(2.4), lessThan(3.0)));
+      expect(
+        contrastBetween(sprout, warmBg),
+        allOf(greaterThanOrEqualTo(2.4), lessThan(3.0)),
+      );
       expect(contrastBetween(sproutDark, darkBg), greaterThanOrEqualTo(3.0));
     });
 
@@ -87,6 +89,13 @@ void main() {
         expect(contrastBetween(navy, c), lessThan(4.5));
         expect(contrastBetween(Colors.white, c), lessThan(4.5));
       }
+    });
+
+    test('the deep sprout carries white, which the accent cannot', () {
+      for (final c in [sproutDeep, sproutDeepDark]) {
+        expect(contrastBetween(Colors.white, c), greaterThanOrEqualTo(4.5));
+      }
+      expect(contrastBetween(Colors.white, sprout), lessThan(4.5));
     });
 
     test('the coin at wash strength does carry ink', () {
@@ -116,15 +125,20 @@ void main() {
         // brand colour. The cell is decoration: every amount it encodes is
         // also printed as text on the same screen. Wick made the same call and
         // lands at 1.15; the sprout measures ~1.90.
-        expect(contrastBetween(accent, unlit),
-            greaterThanOrEqualTo(dark ? 3.0 : 1.8),
-            reason: '$where: a spent cell is not distinct from an empty one');
+        expect(
+          contrastBetween(accent, unlit),
+          greaterThanOrEqualTo(dark ? 3.0 : 1.8),
+          reason: '$where: a spent cell is not distinct from an empty one',
+        );
       });
 
       test('$where: month and weekday labels survive the well', () {
         final label = dark ? Colors.white : over(navySoft, 0.85, well);
-        expect(contrastBetween(label, well), greaterThanOrEqualTo(4.5),
-            reason: '$where: grid furniture is lost in the well');
+        expect(
+          contrastBetween(label, well),
+          greaterThanOrEqualTo(4.5),
+          reason: '$where: grid furniture is lost in the well',
+        );
       });
     }
   });
@@ -136,18 +150,26 @@ void main() {
     for (final swatch in catColors) {
       test('${swatch.name}: a glyph reads on its own fill', () {
         final ink = onAccentOf(swatch.value);
-        expect(contrastBetween(ink, swatch.value), greaterThanOrEqualTo(4.5),
-            reason: '${swatch.name}: the glyph fails on its own fill');
+        expect(
+          contrastBetween(ink, swatch.value),
+          greaterThanOrEqualTo(4.5),
+          reason: '${swatch.name}: the glyph fails on its own fill',
+        );
       });
 
       test('${swatch.name}: chip text survives its own dark well', () {
         // At night a chip is accent ink on a faint well of itself. On cream it
         // inverts to the normal foreground — see `onTint`.
-        final darkWell =
-            over(swatch.value, 0.15, over(swatch.value, 0.07, darkBg));
-        expect(contrastBetween(swatch.value, darkWell),
-            greaterThanOrEqualTo(4.5),
-            reason: '${swatch.name}: chip text is lost in its own well');
+        final darkWell = over(
+          swatch.value,
+          0.15,
+          over(swatch.value, 0.07, darkBg),
+        );
+        expect(
+          contrastBetween(swatch.value, darkWell),
+          greaterThanOrEqualTo(4.5),
+          reason: '${swatch.name}: chip text is lost in its own well',
+        );
       });
     }
 
@@ -162,8 +184,11 @@ void main() {
       // If a swatch ever arrives dark enough to read on cream, the dark well
       // stops being necessary for it and this assumption needs revisiting.
       for (final c in catColors) {
-        expect(c.value.computeLuminance(), greaterThan(0.25),
-            reason: '${c.name} is darker than the palette this was built for');
+        expect(
+          c.value.computeLuminance(),
+          greaterThan(0.25),
+          reason: '${c.name} is darker than the palette this was built for',
+        );
       }
     });
 

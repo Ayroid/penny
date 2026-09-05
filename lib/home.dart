@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'analytics.dart';
-import 'analytics_screen.dart';
 import 'entry_sheet.dart';
 import 'icons.dart';
 import 'money.dart';
@@ -14,10 +13,9 @@ import 'txn_row.dart';
 
 /// The overview: what you have, what moved this period, and the last few rows.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.store, required this.onSettings});
+  const HomePage({super.key, required this.store});
 
   final PennyStore store;
-  final VoidCallback onSettings;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -97,131 +95,98 @@ class _HomePageState extends State<HomePage> {
         // Held rather than tapped, it floats the quick entries.
         store: store,
       ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            PageBar(
-              title: greeting(),
-              // The date, the way Wick's Today page carries it. `today()`
-              // rather than `DateTime.now()` so it moves with the injected
-              // clock and the goldens stay still.
-              subtitle: longDate(today()),
-              actions: [
-                // Insights is a page you go to, not a tab you land on by
-                // swiping past it — so it sits here, next to the other thing
-                // you open on purpose.
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+        children: [
+          _BalanceCard(store: store),
+
+          // A brand-new ledger skips the period controls entirely.
+          // Three cards of zeroes and an unlit heatmap push the one
+          // thing there is to do below the fold, and the empty state
+          // is the screen most people see first.
+          if (store.txns.isEmpty) ...[
+            PennyMessage(
+              headline: 'Nothing tracked yet',
+              body: 'Add what you spent or earned and it will show up here.',
+              actionLabel: 'Add a transaction',
+              onAction: () => showEntrySheet(context, store),
+              size: 132,
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+
+            Segmented<Period>(
+              options: {for (final p in Period.values) p: p.label},
+              value: _period,
+              onChanged: (p) => setState(() => _period = p),
+            ),
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
                 RoundIconButton(
-                  icon: LucideIcons.chartPie,
-                  tooltip: 'Insights',
-                  onPressed: () => openInsights(context, store),
+                  icon: LucideIcons.chevronLeft,
+                  tooltip: 'Previous ${_period.label.toLowerCase()}',
+                  size: 36,
+                  onPressed: () => _step(-1),
                 ),
-                RoundIconButton(
-                  icon: LucideIcons.settings,
-                  tooltip: 'Settings',
-                  onPressed: widget.onSettings,
+                Expanded(
+                  child: Text(
+                    _rangeLabel,
+                    textAlign: TextAlign.center,
+                    style: mono(
+                      12.5,
+                      color: scheme.secondary,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Opacity(
+                  // Kept in the layout rather than removed, so the label
+                  // does not jump sideways at the present period.
+                  opacity: _canGoForward ? 1 : 0.25,
+                  child: RoundIconButton(
+                    icon: LucideIcons.chevronRight,
+                    tooltip: 'Next ${_period.label.toLowerCase()}',
+                    size: 36,
+                    onPressed: () => _canGoForward ? _step(1) : null,
+                  ),
                 ),
               ],
             ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
-                children: [
-                  _BalanceCard(store: store),
+            const SizedBox(height: 12),
 
-                  // A brand-new ledger skips the period controls entirely.
-                  // Three cards of zeroes and an unlit heatmap push the one
-                  // thing there is to do below the fold, and the empty state
-                  // is the screen most people see first.
-                  if (store.txns.isEmpty) ...[
-                    PennyMessage(
-                      headline: 'Nothing tracked yet',
-                      body:
-                          'Add what you spent or earned and it will show up here.',
-                      actionLabel: 'Add a transaction',
-                      onAction: () => showEntrySheet(context, store),
-                      size: 132,
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 12),
+            _FlowCard(totals: totals, hidden: store.hideAmounts),
 
-                    Segmented<Period>(
-                      options: {for (final p in Period.values) p: p.label},
-                      value: _period,
-                      onChanged: (p) => setState(() => _period = p),
-                    ),
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        RoundIconButton(
-                          icon: LucideIcons.chevronLeft,
-                          tooltip: 'Previous ${_period.label.toLowerCase()}',
-                          size: 36,
-                          onPressed: () => _step(-1),
-                        ),
-                        Expanded(
-                          child: Text(
-                            _rangeLabel,
-                            textAlign: TextAlign.center,
-                            style: mono(
-                              12.5,
-                              color: scheme.secondary,
-                              weight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Opacity(
-                          // Kept in the layout rather than removed, so the label
-                          // does not jump sideways at the present period.
-                          opacity: _canGoForward ? 1 : 0.25,
-                          child: RoundIconButton(
-                            icon: LucideIcons.chevronRight,
-                            tooltip: 'Next ${_period.label.toLowerCase()}',
-                            size: 36,
-                            onPressed: () => _canGoForward ? _step(1) : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    _FlowCard(totals: totals, hidden: store.hideAmounts),
-
-                    // Week and month both get the grid — a week is simply one
-                    // row of it. A single day would be one cell, which tells
-                    // you nothing the figures above have not.
-                    if (_period != Period.day) ...[
-                      const SizedBox(height: 12),
-                      _SpendHeatmap(
-                        spend: spendByDay(store.txns, range),
-                        hidden: store.hideAmounts,
-                        range: range,
-                      ),
-                    ],
-
-                    const SizedBox(height: 24),
-                    if (rows.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: PennyMessage(
-                          pose: Penny.rest,
-                          headline:
-                              'Nothing this ${_period.label.toLowerCase()}',
-                          body: 'A quiet stretch. Nothing moved in or out.',
-                          actionLabel: 'Add a transaction',
-                          onAction: () => showEntrySheet(context, store),
-                          size: 120,
-                        ),
-                      )
-                    else
-                      ...recent,
-                  ],
-                ],
+            // Week and month both get the grid — a week is simply one
+            // row of it. A single day would be one cell, which tells
+            // you nothing the figures above have not.
+            if (_period != Period.day) ...[
+              const SizedBox(height: 12),
+              _SpendHeatmap(
+                spend: spendByDay(store.txns, range),
+                hidden: store.hideAmounts,
+                range: range,
               ),
-            ),
+            ],
+
+            const SizedBox(height: 24),
+            if (rows.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: PennyMessage(
+                  pose: Penny.rest,
+                  headline: 'Nothing this ${_period.label.toLowerCase()}',
+                  body: 'A quiet stretch. Nothing moved in or out.',
+                  actionLabel: 'Add a transaction',
+                  onAction: () => showEntrySheet(context, store),
+                  size: 120,
+                ),
+              )
+            else
+              ...recent,
           ],
-        ),
+        ],
       ),
     );
   }

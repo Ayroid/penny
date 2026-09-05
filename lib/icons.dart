@@ -1,16 +1,21 @@
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// The icon set, grouped the way money gets spent.
+import 'icons_all.dart';
+
+/// The icons offered first, grouped the way money gets spent.
 ///
 /// Lucide via `lucide_icons_flutter` — an icon *font*, so an icon costs a
 /// codepoint rather than an asset and `--tree-shake-icons` strips every glyph
 /// nothing here names.
 ///
-/// ponytail: the whole package for ~120 icons, ~0.7 MB of the release APK. If
-/// that ever matters, generate a private class holding only the codepoints
-/// below and drop the dependency — the keys here are the interface, so nothing
-/// outside this file would change.
+/// These are the shortlist, not the whole list: everything Lucide draws is in
+/// [lucideIcons] behind the picker's search box. The grouping survives because
+/// a picker that opens on two thousand icons is a picker nobody chooses from.
+///
+/// ponytail: the full set means the icon font can no longer be tree-shaken —
+/// every glyph is referenced, so the release APK carries all ~0.7 MB of it. If
+/// that ever matters, the shortlist below is what to fall back to.
 ///
 /// Every entry is stored by its key, never by codepoint: a package upgrade
 /// that renumbers glyphs must not silently repaint everyone's categories.
@@ -127,11 +132,29 @@ const iconGroups = <String, Map<String, IconData>>{
   },
 };
 
-/// Every icon by key, flattened. Built once — rebuilding a 120-entry map per
-/// row per frame is the kind of thing that only shows up on a long ledger.
+/// Every icon by key: the shortlist first, then everything else Lucide draws.
+///
+/// The shortlist wins on a clash, because its keys are the ones already stored
+/// in people's categories — 'trash' here is Lucide's `trash-2`, and a stored
+/// icon must keep drawing what it drew the day it was picked.
+///
+/// Built once — rebuilding a two-thousand-entry map per row per frame is the
+/// kind of thing that only shows up on a long ledger.
 final iconByKey = <String, IconData>{
   for (final group in iconGroups.values) ...group,
+  for (final entry in lucideIcons.entries)
+    if (!_shortlist.contains(entry.key)) entry.key: entry.value,
 };
+
+final _shortlist = {
+  for (final group in iconGroups.values) ...group.keys,
+};
+
+/// Picker order: the shortlist as grouped above, then the rest alphabetically.
+final iconKeys = <String>[
+  ..._shortlist,
+  ...iconByKey.keys.where((k) => !_shortlist.contains(k)),
+];
 
 /// Which group a key belongs to, for the picker's search results.
 final groupOfIcon = <String, String>{

@@ -23,6 +23,13 @@ const navy = Color(0xFF16295C);
 const navySoft = Color(0xFF33487C);
 const sprout = Color(0xFF34B863);
 const sproutSoft = Color(0xFFE6F6EC);
+// The sprout with the lights off — the one green dark enough to carry white
+// text (the accent itself is 2.57:1 against white and fails outright). Exists
+// for the hero panel on Goals, the app's one filled card: everything else
+// separates surfaces with tint.
+const sproutDeep = Color(0xFF0D4531);
+const sproutDeepDark = Color(0xFF10412F);
+
 const warmBg = Color(0xFFFFF8F1);
 const warmSunk = Color(0xFFF4ECE3);
 const warmGray = Color(0xFFDED6CC);
@@ -70,6 +77,9 @@ bool isDark(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
 /// money growing rather than the money leaving.
 Color sproutOf(BuildContext c) => isDark(c) ? sproutDark : sprout;
 Color sproutSoftOf(BuildContext c) => isDark(c) ? sproutSoftDark : sproutSoft;
+
+/// The deep sprout — the filled panel white sits on. See [sproutDeep].
+Color sproutDeepOf(BuildContext c) => isDark(c) ? sproutDeepDark : sproutDeep;
 
 /// The coin. Expense fills and every chart bar — the design system reserves
 /// the accent so it never has to fill a chart.

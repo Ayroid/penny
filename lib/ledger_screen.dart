@@ -95,118 +95,104 @@ class _LedgerPageState extends State<LedgerPage> {
         // Held rather than tapped, it floats the quick entries.
         store: store,
       ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            PageBar(
-              title: 'Ledger',
-              subtitle: rows.length == all.length
-                  ? '${all.length} ${all.length == 1 ? 'entry' : 'entries'}'
-                  : '${rows.length} of ${all.length}',
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _search,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Search notes, categories, amounts',
-                      prefixIcon: const Icon(LucideIcons.search, size: 18),
-                      suffixIcon: _search.text.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(LucideIcons.x, size: 16),
-                              tooltip: 'Clear search',
-                              onPressed: () => setState(() => _search.clear()),
-                            ),
-                    ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search notes, categories, amounts',
+                    prefixIcon: const Icon(LucideIcons.search, size: 18),
+                    suffixIcon: _search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(LucideIcons.x, size: 16),
+                            tooltip: 'Clear search',
+                            onPressed: () => setState(() => _search.clear()),
+                          ),
                   ),
-                  const SizedBox(height: 10),
-                  // Three, not four. The design system is explicit that more
-                  // than three options is a list rather than a segmented
-                  // control, and transfers are rare enough to live under All.
-                  Segmented<TxKind?>(
-                    options: const {
-                      null: 'All',
-                      TxKind.expense: 'Debit',
-                      TxKind.income: 'Credit',
-                    },
-                    value: _kind,
-                    onChanged: (k) => setState(() => _kind = k),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 10),
+                // Three, not four. The design system is explicit that more
+                // than three options is a list rather than a segmented
+                // control, and transfers are rare enough to live under All.
+                Segmented<TxKind?>(
+                  options: const {
+                    null: 'All',
+                    TxKind.expense: 'Debit',
+                    TxKind.income: 'Credit',
+                  },
+                  value: _kind,
+                  onChanged: (k) => setState(() => _kind = k),
+                ),
+              ],
             ),
-            Expanded(
-              child: items.isEmpty
-                  ? PennyMessage(
-                      pose: all.isEmpty ? Penny.standing : Penny.thinking,
-                      headline: all.isEmpty
-                          ? 'Nothing tracked yet'
-                          : 'No matches',
-                      body: all.isEmpty
-                          ? 'Every transaction you add lands here.'
-                          : 'Nothing in the ledger fits that.',
-                      actionLabel: all.isEmpty ? 'Add a transaction' : null,
-                      onAction: all.isEmpty
-                          ? () => showEntrySheet(context, store)
-                          : null,
-                      size: 120,
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
-                      itemCount: items.length,
-                      itemBuilder: (context, i) {
-                        final item = items[i];
-                        if (item.txn == null) {
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              left: 8,
-                              right: 8,
-                              top: i == 0 ? 4 : 18,
-                              bottom: 4,
-                            ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  dayHeader(item.header!),
-                                  style: text.labelSmall,
+          ),
+          Expanded(
+            child: items.isEmpty
+                ? PennyMessage(
+                    pose: all.isEmpty ? Penny.standing : Penny.thinking,
+                    headline: all.isEmpty
+                        ? 'Nothing tracked yet'
+                        : 'No matches',
+                    body: all.isEmpty
+                        ? 'Every transaction you add lands here.'
+                        : 'Nothing in the ledger fits that.',
+                    actionLabel: all.isEmpty ? 'Add a transaction' : null,
+                    onAction: all.isEmpty
+                        ? () => showEntrySheet(context, store)
+                        : null,
+                    size: 120,
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+                    itemCount: items.length,
+                    itemBuilder: (context, i) {
+                      final item = items[i];
+                      if (item.txn == null) {
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            left: 8,
+                            right: 8,
+                            top: i == 0 ? 4 : 18,
+                            bottom: 4,
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                dayHeader(item.header!),
+                                style: text.labelSmall,
+                              ),
+                              const Spacer(),
+                              Text(
+                                store.show(rupeesWhole(item.net, signed: true)),
+                                style: mono(
+                                  11,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary,
+                                  weight: FontWeight.w700,
                                 ),
-                                const Spacer(),
-                                Text(
-                                  store.show(
-                                    rupeesWhole(item.net, signed: true),
-                                  ),
-                                  style: mono(
-                                    11,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.secondary,
-                                    weight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                        return TxnRow(
-                          store: store,
-                          txn: item.txn!,
-                          showBalance: balances[item.txn!.id],
-                          onTap: () => showEntrySheet(
-                            context,
-                            store,
-                            existing: item.txn,
+                              ),
+                            ],
                           ),
                         );
-                      },
-                    ),
-            ),
-          ],
-        ),
+                      }
+                      return TxnRow(
+                        store: store,
+                        txn: item.txn!,
+                        showBalance: balances[item.txn!.id],
+                        onTap: () =>
+                            showEntrySheet(context, store, existing: item.txn),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }

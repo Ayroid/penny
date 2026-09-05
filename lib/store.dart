@@ -986,16 +986,38 @@ class PennyStore extends ChangeNotifier {
     return categories.isEmpty ? '' : categories.first.id;
   }
 
+  /// The most that can go from [fromAccountId] into [g] right now.
+  ///
+  /// Two ceilings, and the lower one wins: what the account actually holds,
+  /// and what the goal still needs. Zero or less means nothing can move —
+  /// an empty account, or a goal already funded.
+  int roomToPutAside(Goal g, String fromAccountId) {
+    final balance = balanceOf(fromAccountId);
+    final needed = statusOf(g).remaining;
+    return balance < needed ? balance : needed;
+  }
+
   /// Put [minor] aside for [g], out of [fromAccountId].
   ///
   /// An ordinary transfer, dated today, tagged with the goal: the account it
   /// came from is lighter by the amount, the goals account is heavier, and the
   /// total balance does not move — the money is still yours, it is just
   /// somewhere with a name on it.
-  Txn putAside(Goal g, int minor, String fromAccountId) {
+  ///
+  /// The two ceilings are refused differently, because they are different
+  /// mistakes. More than the account holds is not money, so nothing moves at
+  /// all and this returns null. More than the goal still needs is only an
+  /// overshoot, so ₹500 offered to a goal that needs ₹300 moves ₹300 and the
+  /// rest stays where it was.
+  Txn? putAside(Goal g, int minor, String fromAccountId) {
+    final needed = statusOf(g).remaining;
+    if (minor <= 0 || needed <= 0 || minor > balanceOf(fromAccountId)) {
+      return null;
+    }
+    final capped = minor < needed ? minor : needed;
     final t = Txn(
       kind: TxKind.transfer,
-      amountMinor: minor,
+      amountMinor: capped,
       day: dayKey(today()),
       categoryId: _transferCategoryId(),
       accountId: fromAccountId,

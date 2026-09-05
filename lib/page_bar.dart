@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import 'analytics_screen.dart';
 import 'icons.dart';
 import 'money.dart';
+import 'settings.dart';
 import 'store.dart';
 import 'theme.dart';
 
@@ -64,6 +66,62 @@ class PageBar extends StatelessWidget {
           for (final a in actions) ...[const SizedBox(width: 8), a],
         ],
       ),
+    );
+  }
+}
+
+/// The shell's one bar, above all three tabs.
+///
+/// The title switches when a swipe *lands* — no crossfade, and nothing that
+/// travels with the finger: the pages sliding underneath already say the swipe
+/// happened, and a headline recomputed every frame is three pages of cards
+/// rebuilt with it. Settings rides here rather than on the Overview page, so
+/// it is one tap from wherever you are instead of a swipe home first.
+class ShellBar extends StatelessWidget {
+  const ShellBar({super.key, required this.store, required this.page});
+
+  final PennyStore store;
+
+  /// The page that has landed — 0, 1 or 2.
+  final int page;
+
+  (String, String) _titleFor() {
+    switch (page) {
+      case 0:
+        // `today()` rather than `DateTime.now()` so it moves with the
+        // injected clock and the goldens stay still.
+        return (greeting(), longDate(today()));
+      case 1:
+        return ('Ledger', plural(store.txns.length, 'entry', 'entries'));
+      default:
+        // The page's own hero card carries the total now, and a screen that
+        // says the same number twice reads as a screen that has nothing else
+        // to say.
+        return ('Goals', 'What you are saving for');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (title, subtitle) = _titleFor();
+
+    return PageBar(
+      title: title,
+      subtitle: subtitle,
+      actions: [
+        // Both on every tab: they are pages you open on purpose, from
+        // wherever you are, rather than things this or that tab owns.
+        RoundIconButton(
+          icon: LucideIcons.chartPie,
+          tooltip: 'Insights',
+          onPressed: () => openInsights(context, store),
+        ),
+        RoundIconButton(
+          icon: LucideIcons.settings,
+          tooltip: 'Settings',
+          onPressed: () => openSettings(context, store),
+        ),
+      ],
     );
   }
 }

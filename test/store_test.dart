@@ -91,18 +91,24 @@ void main() {
     test('income adds and expense subtracts', () async {
       final s = await seeded();
       final bank = acc(s, 'Bank');
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.income,
           amountMinor: 8000000,
           day: '2026-09-01',
           categoryId: cat(s, 'Salary'),
-          accountId: bank));
-      s.addTxn(Txn(
+          accountId: bank,
+        ),
+      );
+      s.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 45000,
           day: '2026-09-02',
           categoryId: cat(s, 'Food & Drink'),
-          accountId: bank));
+          accountId: bank,
+        ),
+      );
 
       expect(s.balanceOf(bank), 8000000 - 45000);
       expect(s.totalBalance, 7955000);
@@ -131,35 +137,47 @@ void main() {
       final s = await seeded();
       final bank = acc(s, 'Bank'), cash = acc(s, 'Cash');
       s.accountById(bank)!.openingBalanceMinor = 1000000;
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.transfer,
           amountMinor: 500000,
           day: '2026-09-03',
           categoryId: cat(s, 'Other'),
           accountId: bank,
-          toAccountId: cash));
+          toAccountId: cash,
+        ),
+      );
 
       expect(s.balanceOf(bank), 500000, reason: 'money left the bank');
       expect(s.balanceOf(cash), 500000, reason: 'and arrived in cash');
-      expect(s.totalBalance, 1000000,
-          reason: 'a withdrawal does not change what you have');
+      expect(
+        s.totalBalance,
+        1000000,
+        reason: 'a withdrawal does not change what you have',
+      );
     });
 
     test('a transfer is neither income nor expense', () async {
       final s = await seeded();
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.transfer,
           amountMinor: 500000,
           day: '2026-09-03',
           categoryId: cat(s, 'Other'),
           accountId: acc(s, 'Bank'),
-          toAccountId: acc(s, 'Cash')));
+          toAccountId: acc(s, 'Cash'),
+        ),
+      );
 
       final income = s.txns.where((t) => t.kind == TxKind.income);
       final expense = s.txns.where((t) => t.kind == TxKind.expense);
       expect(income, isEmpty);
-      expect(expense, isEmpty,
-          reason: 'a cash withdrawal must not read as spending');
+      expect(
+        expense,
+        isEmpty,
+        reason: 'a cash withdrawal must not read as spending',
+      );
     });
   });
 
@@ -168,12 +186,13 @@ void main() {
       final s = await seeded();
       final a = acc(s, 'Cash'), c = cat(s, 'Other');
       Txn t(String day, String note) => Txn(
-          kind: TxKind.expense,
-          amountMinor: 100,
-          day: day,
-          categoryId: c,
-          accountId: a,
-          note: note);
+        kind: TxKind.expense,
+        amountMinor: 100,
+        day: day,
+        categoryId: c,
+        accountId: a,
+        note: note,
+      );
 
       s.addTxn(t('2026-09-01', 'first'));
       s.addTxn(t('2026-09-03', 'third'));
@@ -184,20 +203,26 @@ void main() {
     test('editing a day re-sorts', () async {
       final s = await seeded();
       final a = acc(s, 'Cash'), cc = cat(s, 'Other');
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 100,
           day: '2026-09-01',
           categoryId: cc,
           accountId: a,
-          note: 'moved'));
-      s.addTxn(Txn(
+          note: 'moved',
+        ),
+      );
+      s.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 100,
           day: '2026-09-02',
           categoryId: cc,
           accountId: a,
-          note: 'other'));
+          note: 'other',
+        ),
+      );
       expect(s.txns.first.note, 'other');
 
       s.txns.firstWhere((t) => t.note == 'moved').day = '2026-09-05';
@@ -210,40 +235,52 @@ void main() {
     final s = await seeded();
     final a = acc(s, 'Cash'), c = cat(s, 'Other');
     for (final d in ['2026-09-01', '2026-09-02', '2026-09-03']) {
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 100,
           day: d,
           categoryId: c,
           accountId: a,
-          note: d));
+          note: d,
+        ),
+      );
     }
     final victim = s.txns[1];
     final i = s.removeTxn(victim);
     expect(i, 1);
     expect(s.txns, hasLength(2));
     s.insertTxnAt(i, victim);
-    expect(s.txns.map((t) => t.note),
-        ['2026-09-03', '2026-09-02', '2026-09-01']);
+    expect(s.txns.map((t) => t.note), [
+      '2026-09-03',
+      '2026-09-02',
+      '2026-09-01',
+    ]);
   });
 
   group('backup', () {
     test('export then import is a round trip', () async {
       final s = await seeded();
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.income,
           amountMinor: 8000000,
           day: '2026-09-01',
           categoryId: cat(s, 'Salary'),
           accountId: acc(s, 'Bank'),
-          note: 'September'));
-      s.addTxn(Txn(
+          note: 'September',
+        ),
+      );
+      s.addTxn(
+        Txn(
           kind: TxKind.transfer,
           amountMinor: 500000,
           day: '2026-09-02',
           categoryId: cat(s, 'Other'),
           accountId: acc(s, 'Bank'),
-          toAccountId: acc(s, 'Cash')));
+          toAccountId: acc(s, 'Cash'),
+        ),
+      );
       final before = s.exportJson();
       final balance = s.totalBalance;
 
@@ -251,26 +288,34 @@ void main() {
       expect(fresh.importJson(before), isTrue);
       expect(fresh.txns, hasLength(2));
       expect(fresh.totalBalance, balance);
-      expect(fresh.txns.firstWhere((t) => t.note == 'September').amountMinor,
-          8000000);
+      expect(
+        fresh.txns.firstWhere((t) => t.note == 'September').amountMinor,
+        8000000,
+      );
       expect(fresh.txns.any((t) => t.kind == TxKind.transfer), isTrue);
     });
 
     test('a malformed file leaves existing data untouched', () async {
       final s = await seeded();
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 45000,
           day: '2026-09-01',
           categoryId: cat(s, 'Food & Drink'),
-          accountId: acc(s, 'Cash')));
+          accountId: acc(s, 'Cash'),
+        ),
+      );
       final before = s.exportJson();
 
       expect(s.importJson('this is not json'), isFalse);
       expect(s.importJson('{"txns": "not a list"}'), isFalse);
       // Compared without `exportedAt`, which is a fresh timestamp per call.
-      expect(data(s.exportJson()), data(before),
-          reason: 'a rejected import must not have cleared anything');
+      expect(
+        data(s.exportJson()),
+        data(before),
+        reason: 'a rejected import must not have cleared anything',
+      );
     });
 
     test('a hand-edited negative amount cannot invert a balance', () async {
@@ -286,20 +331,22 @@ void main() {
       expect(s.balanceOf('a1'), 0);
     });
 
-    test('a row naming a category that does not exist is adopted, not lost',
-        () async {
-      final s = await loaded();
-      s.importJson('''
+    test(
+      'a row naming a category that does not exist is adopted, not lost',
+      () async {
+        final s = await loaded();
+        s.importJson('''
         {"accounts":[{"id":"a1","name":"Cash","opening":0}],
          "categories":[],
          "txns":[{"id":"t1","kind":"expense","amount":45000,"day":"2026-09-01",
                   "category":"ghost","account":"ghost"}]}
       ''');
-      expect(s.txns, hasLength(1), reason: 'the money must not vanish');
-      expect(s.categoryById(s.txns.single.categoryId)?.name, 'Uncategorised');
-      expect(s.txns.single.accountId, 'a1');
-      expect(s.balanceOf('a1'), -45000);
-    });
+        expect(s.txns, hasLength(1), reason: 'the money must not vanish');
+        expect(s.categoryById(s.txns.single.categoryId)?.name, 'Uncategorised');
+        expect(s.txns.single.accountId, 'a1');
+        expect(s.balanceOf('a1'), -45000);
+      },
+    );
 
     test('a transfer with nowhere to go degrades to an expense', () async {
       final s = await loaded();
@@ -319,21 +366,27 @@ void main() {
       final s = await loaded();
       expect(s.importJson('{}'), isTrue);
       expect(s.txns, isEmpty);
-      expect(s.accounts, hasLength(1),
-          reason: 'there is always somewhere to put money');
+      expect(
+        s.accounts,
+        hasLength(1),
+        reason: 'there is always somewhere to put money',
+      );
     });
   });
 
   group('persistence', () {
     test('a saved ledger comes back on the next launch', () async {
       final s = await seeded();
-      s.addTxn(Txn(
+      s.addTxn(
+        Txn(
           kind: TxKind.expense,
           amountMinor: 45000,
           day: '2026-09-01',
           categoryId: cat(s, 'Food & Drink'),
           accountId: acc(s, 'Cash'),
-          note: 'lunch'));
+          note: 'lunch',
+        ),
+      );
       await Future<void>.delayed(Duration.zero); // let the write land
 
       final next = await loaded();
@@ -341,13 +394,15 @@ void main() {
       expect(next.totalBalance, -45000);
     });
 
-    test('corrupt stored data starts empty rather than bricking launch',
-        () async {
-      SharedPreferences.setMockInitialValues({'ledger': '{{{not json'});
-      final s = await loaded();
-      expect(s.loaded, isTrue);
-      expect(s.txns, isEmpty);
-    });
+    test(
+      'corrupt stored data starts empty rather than bricking launch',
+      () async {
+        SharedPreferences.setMockInitialValues({'ledger': '{{{not json'});
+        final s = await loaded();
+        expect(s.loaded, isTrue);
+        expect(s.txns, isEmpty);
+      },
+    );
 
     test('a moment is claimed once per day', () async {
       final s = await loaded();
@@ -394,21 +449,25 @@ void main() {
       expect(s.shortcuts, hasLength(1));
     });
 
-    test('the same amount from a different account is a different pin',
-        () async {
-      final (s, pin) = await withPin();
-      expect(
-        s.addShortcut(Shortcut(
-          kind: pin.kind,
-          amountMinor: pin.amountMinor,
-          categoryId: pin.categoryId,
-          accountId: acc(s, 'Bank'),
-          note: pin.note,
-        )),
-        isTrue,
-      );
-      expect(s.shortcuts, hasLength(2));
-    });
+    test(
+      'the same amount from a different account is a different pin',
+      () async {
+        final (s, pin) = await withPin();
+        expect(
+          s.addShortcut(
+            Shortcut(
+              kind: pin.kind,
+              amountMinor: pin.amountMinor,
+              categoryId: pin.categoryId,
+              accountId: acc(s, 'Bank'),
+              note: pin.note,
+            ),
+          ),
+          isTrue,
+        );
+        expect(s.shortcuts, hasLength(2));
+      },
+    );
 
     test('a transaction finds the pin that matches it', () async {
       final (s, pin) = await withPin();
@@ -416,11 +475,12 @@ void main() {
       expect(s.shortcutFor(matching)?.id, pin.id);
 
       final different = Txn(
-          kind: TxKind.expense,
-          amountMinor: 9999,
-          day: dayKey(today()),
-          categoryId: pin.categoryId,
-          accountId: pin.accountId);
+        kind: TxKind.expense,
+        amountMinor: 9999,
+        day: dayKey(today()),
+        categoryId: pin.categoryId,
+        accountId: pin.accountId,
+      );
       expect(s.shortcutFor(different), isNull);
     });
 
@@ -441,12 +501,13 @@ void main() {
       expect(fresh.shortcuts.single.note, 'chai');
     });
 
-    test('a pin pointing at a deleted account is dropped, not repointed',
-        () async {
-      // Adopting it would spend from the wrong account on a single tap — a
-      // shortcut is a convenience, not a record worth rescuing.
-      final s = await loaded();
-      s.importJson('''
+    test(
+      'a pin pointing at a deleted account is dropped, not repointed',
+      () async {
+        // Adopting it would spend from the wrong account on a single tap — a
+        // shortcut is a convenience, not a record worth rescuing.
+        final s = await loaded();
+        s.importJson('''
         {"accounts":[{"id":"a1","name":"Cash","opening":0}],
          "categories":[{"id":"c1","name":"Food","kind":"expense"}],
          "txns":[],
@@ -455,8 +516,9 @@ void main() {
            {"id":"s2","kind":"expense","amount":2000,"category":"c1","account":"ghost"}
          ]}
       ''');
-      expect(s.shortcuts.map((x) => x.id), ['s1']);
-    });
+        expect(s.shortcuts.map((x) => x.id), ['s1']);
+      },
+    );
   });
 
   group('renaming seeded defaults', () {

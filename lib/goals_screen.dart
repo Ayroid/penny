@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'entry_sheet.dart';
 import 'icons.dart';
@@ -21,49 +23,331 @@ class GoalsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final goals = store.goals;
+    // A goal that is ready is the loudest thing this page has to say, so it
+    // says it first. Two passes rather than a comparator: `List.sort` is not
+    // stable, and the order the goals were made in is the order underneath.
+    final goals = [
+      for (final g in store.goals)
+        if (store.statusOf(g).reached) g,
+      for (final g in store.goals)
+        if (!store.statusOf(g).reached) g,
+    ];
 
     return Scaffold(
       floatingActionButton: AddButton(
         tooltip: 'Add a goal',
         onPressed: () => _editGoal(context, store, null),
       ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            PageBar(
-              title: 'Goals',
-              subtitle: goals.isEmpty
-                  ? 'What you are saving for'
-                  : '${plural(goals.length, 'goal')} · '
-                        '${store.show(rupeesWhole(store.totalSetAside))} set aside',
+      body: goals.isEmpty
+          ? PennyMessage(
+              // The pose that shipped in the APK for months without
+              // ever being drawn. This is what it was for.
+              pose: Penny.focus,
+              headline: 'Nothing saved for yet',
+              body:
+                  'Put money aside as you go. Nothing moves between '
+                  'accounts — a goal only marks what is spoken for.',
+              actionLabel: 'Add a goal',
+              onAction: () => _editGoal(context, store, null),
+              size: 132,
+            )
+          // The hero and Penny are items rather than a header and a footer
+          // around the list: on a page with one goal on it the whole thing
+          // has to scroll as one, and on a page with nine the hero should
+          // scroll away like everything else.
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+              itemCount: goals.length + 3,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, i) => switch (i) {
+                0 => _Hero(store: store, goals: goals),
+                1 => Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'YOUR GOALS',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+                _ when i <= goals.length + 1 => _GoalCard(
+                  store: store,
+                  goal: goals[i - 2],
+                ),
+                _ => _Footer(store: store, goals: goals),
+              },
             ),
-            Expanded(
-              child: goals.isEmpty
-                  ? PennyMessage(
-                      // The pose that shipped in the APK for months without
-                      // ever being drawn. This is what it was for.
-                      pose: Penny.focus,
-                      headline: 'Nothing saved for yet',
-                      body:
-                          'Put money aside as you go. Nothing moves between '
-                          'accounts — a goal only marks what is spoken for.',
-                      actionLabel: 'Add a goal',
-                      onAction: () => _editGoal(context, store, null),
-                      size: 132,
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
-                      itemCount: goals.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 12),
-                      itemBuilder: (context, i) =>
-                          _GoalCard(store: store, goal: goals[i]),
+    );
+  }
+}
+
+/// Everything set aside, across every goal.
+///
+/// The page's own answer to "how am I doing", above the goal-by-goal detail —
+/// the shell's subtitle can only afford a line of small print.
+class _Hero extends StatelessWidget {
+  const _Hero({required this.store, required this.goals});
+
+  final PennyStore store;
+  final List<Goal> goals;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final accent = sproutDeepOf(context);
+    // White, which the deep green carries at 9:1 and the accent itself cannot
+    // carry at all. Asserted in test/palette_test.dart.
+    const ink = Colors.white;
+
+    var saved = 0;
+    var target = 0;
+    var ready = 0;
+    for (final g in goals) {
+      final s = store.statusOf(g);
+      saved += s.saved;
+      target += g.targetMinor;
+      if (s.reached) ready++;
+    }
+    final progress = target <= 0 ? 0.0 : (saved / target).clamp(0.0, 1.0);
+    final remaining = target - saved;
+
+    return Semantics(
+      label: store.hideAmounts
+          ? '${(progress * 100).round()} percent of everything saved for'
+          : '${rupees(saved)} of ${rupees(target)} set aside',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          // Two stops of the one green rather than a flat fill: the panel is
+          // the only thing on the page that is not a tinted card, and a
+          // gradient is what keeps it from reading as a slab.
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              accent,
+              Color.alphaBlend(sprout.withValues(alpha: 0.16), accent),
+            ],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'SET ASIDE',
+                    style: text.labelSmall?.copyWith(
+                      color: ink.withValues(alpha: 0.72),
                     ),
+                  ),
+                ),
+                if (ready > 0) ...[
+                  _Pill(
+                    '${plural(ready, 'goal')} ready',
+                    ground: ink.withValues(alpha: 0.18),
+                    ink: ink,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                _Pill(
+                  '${(progress * 100).round()}%',
+                  ground: ink.withValues(alpha: 0.18),
+                  ink: ink,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Flexible(
+                  child: Text(
+                    store.show(rupeesWhole(saved)),
+                    style: text.headlineLarge?.copyWith(color: ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'of ${store.show(rupeesWhole(target))}',
+                  style: mono(12, color: ink.withValues(alpha: 0.72)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _Grow(
+              value: progress,
+              builder: (context, t) => _Bar(
+                value: t,
+                colour: ink,
+                track: ink.withValues(alpha: 0.22),
+                notch: accent,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              remaining > 0
+                  ? '${store.show(rupeesWhole(remaining))} to go across '
+                        '${plural(goals.length, 'goal')}'
+                  : 'Every goal is funded.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              strutStyle: monoStrut(11.5),
+              style: mono(11.5, color: ink.withValues(alpha: 0.78)),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A small rounded count — a percentage, or how many goals are ready.
+class _Pill extends StatelessWidget {
+  const _Pill(this.text, {required this.ground, required this.ink});
+
+  final String text;
+  final Color ground;
+  final Color ink;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: ground,
+        borderRadius: BorderRadius.circular(pill),
+      ),
+      child: Text(
+        text,
+        strutStyle: monoStrut(11),
+        style: mono(11, color: ink, weight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+/// Penny, at the bottom of the page, saying where it stands.
+///
+/// She was only ever drawn on the empty state — which is the one moment on
+/// this page with nothing to be pleased about. Here she is holding the pig
+/// for the money that is actually in it.
+class _Footer extends StatelessWidget {
+  const _Footer({required this.store, required this.goals});
+
+  final PennyStore store;
+  final List<Goal> goals;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = goals.every((g) => store.statusOf(g).reached);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Column(
+        children: [
+          PennyImage(
+            done ? Penny.celebrate : Penny.rest,
+            size: 96,
+            semanticLabel: 'Penny',
+          ),
+          const SizedBox(height: 10),
+          Text(
+            done
+                ? 'All of it is ready. Go and get it.'
+                : 'Nothing here has been spent. It is just spoken for.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Grows a value from nothing the first time it is built, and from wherever
+/// it stood whenever it changes after that.
+///
+/// The bar used to be drawn at its final length before the page had finished
+/// arriving, which is the difference between a page that reports a number and
+/// a page that shows it moving.
+class _Grow extends StatelessWidget {
+  const _Grow({required this.value, required this.builder});
+
+  final double value;
+  final Widget Function(BuildContext, double) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value),
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, _) => builder(context, t),
+    );
+  }
+}
+
+/// The progress bar, with the three milestones notched into it.
+///
+/// [store.claimMilestone] already celebrates at a quarter, a half and three
+/// quarters; until now the page never admitted those existed, so the reward
+/// arrived out of nowhere and there was never a next one in sight.
+class _Bar extends StatelessWidget {
+  const _Bar({
+    required this.value,
+    required this.colour,
+    this.track,
+    this.notch,
+  });
+
+  final double value;
+  final Color colour;
+
+  /// The unfilled remainder, and the colour a passed milestone is notched out
+  /// in — both default to the page's, and both have to be given on the hero,
+  /// which is not sitting on the page ground.
+  final Color? track;
+  final Color? notch;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        LinearProgressIndicator(
+          value: value,
+          minHeight: 6,
+          borderRadius: BorderRadius.circular(pill),
+          color: colour,
+          backgroundColor: track ?? scheme.surfaceContainerHighest,
+        ),
+        for (final m in const [0.25, 0.5, 0.75])
+          Align(
+            // -1 is the left edge and 1 the right, so a fraction of the bar
+            // is twice that fraction, less one.
+            alignment: Alignment(m * 2 - 1, 0),
+            child: Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                // A passed milestone is notched *out* of the fill in the page
+                // ground rather than drawn on top of it: on the saturated
+                // colour nothing else stays legible at 4px.
+                color: value >= m
+                    ? notch ?? Theme.of(context).scaffoldBackgroundColor
+                    : scheme.outline,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -81,6 +365,7 @@ class _GoalCard extends StatelessWidget {
     final colour = catColorAt(goal.color);
     final status = store.statusOf(goal);
     final percent = (status.progress * 100).round();
+    final fill = isDark(context) ? 0.16 : 0.11;
 
     return Semantics(
       button: true,
@@ -89,68 +374,148 @@ class _GoalCard extends StatelessWidget {
           : '${goal.name}, ${rupees(status.saved)} of '
                 '${rupees(goal.targetMinor)}, $percent percent',
       excludeSemantics: true,
-      child: TintCard(
-        onTap: () => _showGoal(context, store, goal),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: colour.withValues(
-                      alpha: isDark(context) ? 0.15 : 0.12,
+      child: _Grow(
+        value: status.progress,
+        builder: (context, t) => TintCard(
+          onTap: () => _showGoal(context, store, goal),
+          // A funded goal takes the brand's own ground. It has stopped being
+          // one of the things on the list and become the thing to act on.
+          color: status.reached ? sproutSoftOf(context) : null,
+          // The card carries its own padding, because the fill behind it has
+          // to run edge to edge — a jar fills to the glass, not to a margin.
+          padding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: t,
+                  // The last stretch of the fill fades out rather than
+                  // ending on a hard rule: a straight edge halfway down a
+                  // card reads as something failing to paint, not as a
+                  // level.
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          colour.withValues(alpha: fill),
+                          colour.withValues(alpha: fill),
+                          colour.withValues(alpha: 0),
+                        ],
+                        stops: const [0, 0.75, 1],
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Icon(iconFor(goal.icon), size: 17, color: colour),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    goal.name,
-                    style: text.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                // "Ready" rather than "100%": the number is the same either
-                // way, and one of them tells you what to do about it.
-                Text(
-                  status.reached ? 'READY' : '$percent%',
-                  style: mono(
-                    11,
-                    color: status.reached
-                        ? sproutOf(context)
-                        : scheme.secondary,
-                    weight: FontWeight.w700,
-                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: colour.withValues(
+                              alpha: isDark(context) ? 0.18 : 0.14,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            iconFor(goal.icon),
+                            size: 18,
+                            color: colour,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Name over what is left to do: the headline of a goal
+                        // is what it is, and the line under it is the only
+                        // number that changes anything about today.
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                goal.name,
+                                style: text.titleMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                status.reached
+                                    ? 'Ready to spend'
+                                    : '${store.show(rupeesWhole(status.remaining))} to go',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                strutStyle: monoStrut(11),
+                                style: mono(
+                                  11,
+                                  color: status.reached
+                                      ? sproutOf(context)
+                                      : scheme.secondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // "Ready" rather than "100%": the number is the same
+                        // either way, and one of them tells you what to do
+                        // about it.
+                        _Pill(
+                          status.reached ? 'READY' : '$percent%',
+                          ground: status.reached
+                              ? sproutOf(context).withValues(alpha: 0.16)
+                              : colour.withValues(alpha: 0.14),
+                          ink: status.reached
+                              ? sproutOf(context)
+                              : scheme.onSurface,
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: scheme.outline,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _Bar(value: t, colour: colour),
+                    const SizedBox(height: 10),
+                    // Whole rupees: three exact figures wrap onto a second
+                    // line on a narrow phone, and nobody saves for a trip to
+                    // the paise.
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            store.show(rupeesWhole(status.saved)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            strutStyle: monoStrut(11.5),
+                            style: mono(
+                              11.5,
+                              color: scheme.onSurface,
+                              weight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          'Target: ${store.show(rupeesWhole(goal.targetMinor))}',
+                          strutStyle: monoStrut(11.5),
+                          style: mono(11.5, color: scheme.secondary),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: status.progress,
-              minHeight: 6,
-              borderRadius: BorderRadius.circular(pill),
-              color: colour,
-              backgroundColor: scheme.surfaceContainerHighest,
-            ),
-            const SizedBox(height: 8),
-            // Whole rupees: three exact figures wrap onto a second line on a
-            // narrow phone, and nobody saves for a trip to the paise.
-            Text(
-              '${store.show(rupeesWhole(status.saved))} of '
-              '${store.show(rupeesWhole(goal.targetMinor))}'
-              '${status.reached ? '' : ' · ${store.show(rupeesWhole(status.remaining))} to go'}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              strutStyle: monoStrut(11.5),
-              style: mono(11.5, color: scheme.secondary),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -194,7 +559,12 @@ Future<void> _showGoal(
         asked.accountId,
       );
     case _Ask.put:
-      store.putAside(goal, asked.amount, asked.accountId);
+      // Null when there was no room left after all — nothing moved, so
+      // nothing is celebrated.
+      if (store.putAside(goal, asked.amount, asked.accountId) == null) return;
+      // The bar grows on the way back to the page; this is the same moment,
+      // felt rather than seen.
+      HapticFeedback.mediumImpact();
   }
 
   final milestone = store.claimMilestone(goal);
@@ -202,9 +572,10 @@ Future<void> _showGoal(
 
   await showPennyMoment(
     context,
-    // The other pose that never had a caller. A finished goal is the one
-    // moment in a money app that is unambiguously worth drawing.
-    pose: milestone == 100 ? Penny.complete : Penny.celebrate,
+    // Arms up and confetti for the finished goal — the one moment in a money
+    // app that is unambiguously worth drawing. The ticked clipboard marks the
+    // quarters along the way: progress noted, not the party.
+    pose: milestone == 100 ? Penny.celebrate : Penny.complete,
     headline: switch (milestone) {
       100 => 'That is the whole thing',
       75 => 'Three quarters of the way',
@@ -251,6 +622,10 @@ class _ContributeSheetState extends State<_ContributeSheet> {
         if (!a.forGoals) a,
     ];
 
+    final account = store.accountById(_accountId);
+    final balance = store.balanceOf(_accountId);
+    final room = store.roomToPutAside(goal, _accountId);
+
     return SheetFrame(
       title: goal.name,
       children: [
@@ -267,6 +642,22 @@ class _ContributeSheetState extends State<_ContributeSheet> {
           value: _amount,
           positiveOnly: true,
           onChanged: (v) => setState(() => _amount = v),
+          // What the typed amount will actually do, before it does it. The two
+          // ceilings read differently on purpose: the account is a wall — that
+          // money is not there — while the goal's is a trim.
+          trailing: _amount > balance
+              ? _Warning(
+                  '${account?.name ?? 'That account'} only has '
+                  '${store.show(rupeesWhole(balance < 0 ? 0 : balance))}',
+                  colour: scheme.error,
+                )
+              : _amount > status.remaining && status.remaining > 0
+              ? _Warning(
+                  '${store.show(rupeesWhole(status.remaining))} is all this '
+                  'goal needs — only that much moves',
+                  colour: scheme.secondary,
+                )
+              : null,
         ),
         const SizedBox(height: 14),
         // The money has to come out of something real. This is the account the
@@ -314,7 +705,10 @@ class _ContributeSheetState extends State<_ContributeSheet> {
             ],
             Expanded(
               child: FilledButton(
-                onPressed: _amount <= 0
+                // Never more than the account holds, and never into a goal
+                // that is already funded. Overshooting the *target* is fine
+                // and stays enabled: the store trims it to what is needed.
+                onPressed: _amount <= 0 || _amount > balance || room <= 0
                     ? null
                     : () => Navigator.pop(context, (
                         ask: _Ask.put,
@@ -328,7 +722,15 @@ class _ContributeSheetState extends State<_ContributeSheet> {
         ),
         if (status.reached) ...[
           const SizedBox(height: 10),
-          TextButton(
+          // The coin at wash strength, with ink on it — the one pairing the
+          // palette sanctions for this tone, and the right one here: buying
+          // the thing is money leaving, which is what the coin has always
+          // meant. Full width like everything else on the sheet, because it
+          // is the point of a finished goal and not a footnote to it.
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: coinSoftOf(context),
+            ),
             onPressed: () => Navigator.pop(context, (
               ask: _Ask.bought,
               amount: 0,
@@ -350,6 +752,28 @@ class _ContributeSheetState extends State<_ContributeSheet> {
           child: const Text('Edit goal'),
         ),
       ],
+    );
+  }
+}
+
+/// A warning inside the amount field, which says why when it is pressed.
+///
+/// A tooltip rather than a line of text under the field: the reason is worth
+/// one tap when the amount looks wrong and worth no space at all the rest of
+/// the time.
+class _Warning extends StatelessWidget {
+  const _Warning(this.message, {required this.colour});
+
+  final String message;
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: message,
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 4),
+      child: Icon(LucideIcons.triangleAlert, size: 18, color: colour),
     );
   }
 }

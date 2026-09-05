@@ -2,16 +2,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:penny/analytics.dart';
 import 'package:penny/store.dart';
 
-Txn tx(TxKind kind, int amount, String day,
-        {String category = 'c1', String? to}) =>
-    Txn(
-      kind: kind,
-      amountMinor: amount,
-      day: day,
-      categoryId: category,
-      accountId: 'a1',
-      toAccountId: to,
-    );
+Txn tx(
+  TxKind kind,
+  int amount,
+  String day, {
+  String category = 'c1',
+  String? to,
+}) => Txn(
+  kind: kind,
+  amountMinor: amount,
+  day: day,
+  categoryId: category,
+  accountId: 'a1',
+  toAccountId: to,
+);
 
 void main() {
   group('ranges', () {
@@ -26,22 +30,32 @@ void main() {
     });
 
     test('a month ends on its own last day, whatever that is', () {
-      expect(rangeFor(Period.month, DateTime(2026, 2, 10)),
-          (from: '2026-02-01', to: '2026-02-28'));
-      expect(rangeFor(Period.month, DateTime(2024, 2, 10)),
-          (from: '2024-02-01', to: '2024-02-29'));
-      expect(rangeFor(Period.month, DateTime(2026, 12, 31)),
-          (from: '2026-12-01', to: '2026-12-31'));
+      expect(rangeFor(Period.month, DateTime(2026, 2, 10)), (
+        from: '2026-02-01',
+        to: '2026-02-28',
+      ));
+      expect(rangeFor(Period.month, DateTime(2024, 2, 10)), (
+        from: '2024-02-01',
+        to: '2024-02-29',
+      ));
+      expect(rangeFor(Period.month, DateTime(2026, 12, 31)), (
+        from: '2026-12-01',
+        to: '2026-12-31',
+      ));
     });
 
     test('shifting a month back crosses the year', () {
-      expect(shiftRange(Period.month, DateTime(2026, 1, 15), -1),
-          (from: '2025-12-01', to: '2025-12-31'));
+      expect(shiftRange(Period.month, DateTime(2026, 1, 15), -1), (
+        from: '2025-12-01',
+        to: '2025-12-31',
+      ));
     });
 
     test('shifting a month from the 31st does not skip February', () {
-      expect(shiftRange(Period.month, DateTime(2026, 1, 31), 1),
-          (from: '2026-02-01', to: '2026-02-28'));
+      expect(shiftRange(Period.month, DateTime(2026, 1, 31), 1), (
+        from: '2026-02-01',
+        to: '2026-02-28',
+      ));
     });
   });
 
@@ -65,11 +79,19 @@ void main() {
         ...txns,
         tx(TxKind.transfer, 500000, '2026-09-03', to: 'a2'),
       ];
-      final before = totalsIn(txns, rangeFor(Period.month, DateTime(2026, 9, 1)));
-      final after =
-          totalsIn(withTransfer, rangeFor(Period.month, DateTime(2026, 9, 1)));
-      expect(after, before,
-          reason: 'withdrawing cash must not change the month');
+      final before = totalsIn(
+        txns,
+        rangeFor(Period.month, DateTime(2026, 9, 1)),
+      );
+      final after = totalsIn(
+        withTransfer,
+        rangeFor(Period.month, DateTime(2026, 9, 1)),
+      );
+      expect(
+        after,
+        before,
+        reason: 'withdrawing cash must not change the month',
+      );
     });
 
     test('an empty range is zero, not an error', () {
@@ -80,8 +102,9 @@ void main() {
     });
 
     test('a net can be negative without anything special happening', () {
-      final t = totalsIn([tx(TxKind.expense, 5000, '2026-09-04')],
-          rangeFor(Period.day, DateTime(2026, 9, 4)));
+      final t = totalsIn([
+        tx(TxKind.expense, 5000, '2026-09-04'),
+      ], rangeFor(Period.day, DateTime(2026, 9, 4)));
       expect(t.net, -5000);
     });
 
@@ -113,15 +136,22 @@ void main() {
     });
 
     test('a category with nothing in it is absent, not zero', () {
-      final b = byCategory(txns, rangeFor(Period.day, DateTime(2026, 9, 2)),
-          TxKind.expense);
+      final b = byCategory(
+        txns,
+        rangeFor(Period.day, DateTime(2026, 9, 2)),
+        TxKind.expense,
+      );
       expect(b, {'travel': 100000});
       expect(b.containsKey('food'), isFalse);
     });
 
     test('spend by day skips income and transfers', () {
       final byDay = spendByDay(txns, september);
-      expect(byDay, {'2026-09-01': 300000, '2026-09-02': 100000, '2026-09-03': 200000});
+      expect(byDay, {
+        '2026-09-01': 300000,
+        '2026-09-02': 100000,
+        '2026-09-03': 200000,
+      });
     });
   });
 
@@ -161,23 +191,36 @@ void main() {
     ];
 
     test('reports the difference, signed', () {
-      final d = changeVsPrevious(txns, Period.month, DateTime(2026, 9, 15),
-          kind: TxKind.expense);
+      final d = changeVsPrevious(
+        txns,
+        Period.month,
+        DateTime(2026, 9, 15),
+        kind: TxKind.expense,
+      );
       expect(d, 180000);
     });
 
     test('stays silent when the previous period predates the ledger', () {
-      final d = changeVsPrevious(txns, Period.month, DateTime(2026, 8, 15),
-          kind: TxKind.expense);
+      final d = changeVsPrevious(
+        txns,
+        Period.month,
+        DateTime(2026, 8, 15),
+        kind: TxKind.expense,
+      );
       expect(d, isNull, reason: 'nothing before August to compare against');
     });
 
     test('stays silent when there is no prior data at all', () {
       final only = [tx(TxKind.expense, 100000, '2026-09-05')];
       expect(
-          changeVsPrevious(only, Period.month, DateTime(2026, 9, 15),
-              kind: TxKind.expense),
-          isNull);
+        changeVsPrevious(
+          only,
+          Period.month,
+          DateTime(2026, 9, 15),
+          kind: TxKind.expense,
+        ),
+        isNull,
+      );
     });
   });
 }
