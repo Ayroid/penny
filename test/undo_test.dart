@@ -1,0 +1,127 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:penny/main.dart';
+import 'package:penny/page_bar.dart';
+import 'package:penny/store.dart';
+import 'package:penny/theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// The undo bar has two ways to be useless, and both of them shipped once:
+/// laid out underneath the floating tab pill, where it cannot be read and its
+/// UNDO cannot be tapped, and then staying there until dismissed by a hand
+/// that could not reach it.
+///
+/// Neither shows up in a golden — the pill paints over the bar, so the image
+/// looks correct — and neither shows up in a test that pumps a page on its
+/// own, because the pill lives in the shell above it. So: the real shell, at
+/// phone size, with a gesture strip.
+void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  Future<PennyStore> emptyStore() async {
+    final store = PennyStore();
+    await store.load();
+    store.seedDefaults();
+    return store;
+  }
+
+  Shortcut pinOf(PennyStore store, String note, int amountMinor) => Shortcut(
+    kind: TxKind.expense,
+    amountMinor: amountMinor,
+    categoryId: store.categoriesOf(TxKind.expense).first.id,
+    accountId: store.accounts.first.id,
+    note: note,
+  );
+
+  Future<Shortcut> shellWithAPin(WidgetTester tester, PennyStore store) async {
+    tester.view
+      ..physicalSize = const Size(1080, 2280)
+      ..devicePixelRatio = 3.0
+      // The strip Android keeps for its own back-swipe. Left at zero, a
+      // margin that ignores the inset would pass this.
+      ..padding = const FakeViewPadding(bottom: 144);
+    addTearDown(tester.view.reset);
+
+    final pin = pinOf(store, 'Chai', 12000);
+    store.addShortcut(pin);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme(dark: false),
+        home: RootScreen(store: store),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return pin;
+  }
+
+  testWidgets('the undo bar clears the tab pill', (tester) async {
+    final store = await emptyStore();
+    await shellWithAPin(tester, store);
+
+    await tester.tap(find.text('Chai'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('UNDO'), findsOneWidget);
+
+    // The painted boxes, not the widgets: `SnackBar` is its own margin and
+    // `PageTabs` is an `Align` filling the shell, so both of those rects are
+    // the whole screen and would compare true no matter where the bar landed.
+    final bar = tester.getRect(
+      find
+          .descendant(
+            of: find.byType(SnackBar),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    final pill = tester.getRect(
+      find.descendant(
+        of: find.byType(PageTabs),
+        matching: find.byType(Material),
+      ),
+    );
+    expect(bar.bottom, lessThanOrEqualTo(pill.top));
+
+    // And within reach: tapped rather than only measured, because a widget
+    // can be laid out clear of the pill and still sit under something else.
+    await tester.tap(find.text('UNDO'));
+    await tester.pumpAndSettle();
+    expect(store.txns, isEmpty);
+  });
+
+  testWidgets('the undo bar leaves on its own', (tester) async {
+    final store = await emptyStore();
+    await shellWithAPin(tester, store);
+
+    await tester.tap(find.text('Chai'));
+    await tester.pumpAndSettle();
+    expect(find.text('UNDO'), findsOneWidget);
+
+    // Nothing tapped and nothing swiped — only time passing.
+    await tester.pump(undoLinger);
+    await tester.pumpAndSettle();
+
+    expect(find.text('UNDO'), findsNothing);
+    // Leaving is not undoing: what was added stays added.
+    expect(store.txns, hasLength(1));
+  });
+
+  testWidgets('unpinning is undoable, back to where it was', (tester) async {
+    final store = await emptyStore();
+    final first = await shellWithAPin(tester, store);
+    final second = pinOf(store, 'Bus', 30000);
+    store.addShortcut(second);
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Chai'));
+    await tester.pumpAndSettle();
+    expect(store.shortcuts.single.id, second.id);
+
+    await tester.tap(find.text('UNDO'));
+    await tester.pumpAndSettle();
+
+    // First again, not appended to the end.
+    expect(store.shortcuts.map((s) => s.id), [first.id, second.id]);
+  });
+}

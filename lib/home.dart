@@ -640,8 +640,8 @@ class _QuickAddChip extends StatelessWidget {
         color: colour.withValues(alpha: isDark(context) ? 0.15 : 0.12),
         borderRadius: BorderRadius.circular(pill),
         child: InkWell(
-          onTap: _add,
-          onLongPress: _unpin,
+          onTap: () => _add(context),
+          onLongPress: () => _unpin(context),
           borderRadius: BorderRadius.circular(pill),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
@@ -679,12 +679,28 @@ class _QuickAddChip extends StatelessWidget {
     );
   }
 
-  void _add() {
-    // No confirmation and no toast: the row appears at the top of RECENT on
-    // the same screen, which is the feedback. Correcting a mis-tap means
-    // opening that row and deleting it.
-    store.addTxn(shortcut.toTxn());
+  /// Added on one tap, so it has to be undoable on one more. Without this the
+  /// shortcut is a trap: a mis-tap costs a trip through the ledger to find the
+  /// row and delete it.
+  void _add(BuildContext context) {
+    final txn = shortcut.toTxn();
+    store.addTxn(txn);
+    showUndoBar(
+      context,
+      'Added ${rupees(txn.amountMinor)}',
+      onUndo: () => store.removeTxn(txn),
+    );
   }
 
-  void _unpin() => store.removeShortcut(shortcut);
+  void _unpin(BuildContext context) {
+    final at = store.shortcuts.indexWhere((s) => s.id == shortcut.id);
+    store.removeShortcut(shortcut);
+    showUndoBar(
+      context,
+      'Unpinned',
+      // Back where it was, not on the end — the strip's order is the order
+      // things were pinned in, and an undo should not quietly reorder it.
+      onUndo: () => store.insertShortcutAt(at, shortcut),
+    );
+  }
 }

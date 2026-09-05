@@ -52,6 +52,18 @@ class PageBar extends StatelessWidget {
 /// One destination in the shell.
 typedef TabSpec = ({String label, IconData icon});
 
+/// What the floating pill occupies at the bottom of the screen: the tab, the
+/// track's padding on both sides, and the gap it floats in.
+///
+/// Named rather than typed in twice, because the pill is not the only thing
+/// that wants the bottom of the screen — [showUndoBar] has to land above it,
+/// and two hand-tuned numbers that must agree is a pair that drifts the first
+/// time either is touched. Wick exports the same three for the same reason.
+const tabHeight = 44.0;
+const tabInset = 5.0;
+const tabBarHeight = tabHeight + tabInset * 2;
+const tabBarGap = 16.0;
+
 const shellTabs = <TabSpec>[
   (label: 'Overview', icon: LucideIcons.house),
   (label: 'Ledger', icon: LucideIcons.receiptText),
@@ -82,7 +94,7 @@ class PageTabs extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: tabBarGap),
           child: Container(
             decoration: BoxDecoration(
               color: isDark(context) ? darkCard : Colors.white,
@@ -97,7 +109,7 @@ class PageTabs extends StatelessWidget {
             child: Material(
               color: Colors.transparent,
               child: Padding(
-                padding: const EdgeInsets.all(5),
+                padding: const EdgeInsets.all(tabInset),
                 child: ValueListenableBuilder<double>(
                   valueListenable: position,
                   builder: (context, value, _) => Row(
@@ -161,7 +173,7 @@ class _Tab extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(pill),
         child: Container(
-          height: 44,
+          height: tabHeight,
           constraints: const BoxConstraints(minWidth: 48),
           padding: EdgeInsets.symmetric(horizontal: 14 + 6 * weight),
           decoration: BoxDecoration(
@@ -196,4 +208,49 @@ class _Tab extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How long an undo stays offered. Long enough to notice a mis-tap, short
+/// enough that it is gone before it becomes furniture.
+const undoLinger = Duration(seconds: 4);
+
+/// A one-line message with one way to take it back.
+///
+/// Floated clear of the tab pill, and gone on its own after [undoLinger].
+/// Both of those are the point: the pill is a `Stack` overlay rather than a
+/// `bottomNavigationBar`, so the `Scaffold` laying the snackbar out does not
+/// know the pill is there and puts the bar underneath it — unreadable, and
+/// with UNDO sitting under a tab that swallows the tap. A bar that also had
+/// to be dismissed by hand was then a bar that could not be dismissed at all.
+///
+/// The same [MediaQuery.paddingOf] the pill's own `SafeArea` reads, so the two
+/// move together: a floating snackbar takes no bottom inset of its own
+/// (`SafeArea(bottom: false)`, in `snack_bar.dart`), and the pill above it
+/// does.
+void showUndoBar(
+  BuildContext context,
+  String message, {
+  required VoidCallback onUndo,
+}) {
+  final clearance =
+      tabBarHeight + tabBarGap + MediaQuery.paddingOf(context).bottom;
+
+  ScaffoldMessenger.of(context)
+    // One at a time. Tapping a pinned chip twice should leave one offer to
+    // undo, not two stacked bars racing each other out.
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: undoLinger,
+        // `SnackBar.persist` defaults to `action != null`, so a bar with an
+        // UNDO on it ignores its own duration and waits to be dismissed by
+        // hand. That default plus a bar laid out under the pill is what made
+        // these undismissable, and a `duration:` that reads as if it works is
+        // why it looked like something else.
+        persist: false,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, clearance + 8),
+        action: SnackBarAction(label: 'UNDO', onPressed: onUndo),
+      ),
+    );
 }

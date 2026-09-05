@@ -225,6 +225,15 @@ ThemeData appTheme({required bool dark}) {
       titleTextStyle: t(18, FontWeight.w700),
       contentTextStyle: t(14, FontWeight.w400, color: muted),
     ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: dark ? darkCard : navy,
+      contentTextStyle: t(14, FontWeight.w600, color: Colors.white),
+      actionTextColor: dark ? coinDark : coinSoft,
+      // Floating, so `showUndoBar` can margin it clear of the tab pill. A
+      // fixed bar is pinned to the bottom edge, which is where the pill is.
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: dark ? darkSunk : navy,

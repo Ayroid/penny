@@ -3,7 +3,7 @@
 Working checklist for what's built, what's broken, and what's next. Tick a box
 when it ships. Keep entries one line; the reasoning lives in the code comments.
 
-**Status:** 17 source files · 6,162 lines · 205 tests · 11 goldens · 4 runtime deps
+**Status:** 17 source files · 6,244 lines · 208 tests · 11 goldens · 4 runtime deps
 **Verified on:** Android device — runs, rupee and mono render, data survives a cold kill
 **Last release:** none — no `key.properties`, so release builds fall back to debug keys
 **Current build:** arm64 **18.3 MB** (`tool/release.sh`, obfuscated + split-debug-info)
@@ -93,6 +93,16 @@ downloads.
   Computing March from a February clamped to the 28th would pin the rule to the
   28th forever.
 
+- **An undo lives in a snackbar above the tab pill, and leaves on its own.**
+  The pill is a `Stack` overlay, so the `Scaffold` laying a floating snackbar
+  out does not know it is there and puts the bar underneath it. On top of that,
+  `SnackBar.persist` defaults to `action != null` — a bar with UNDO on it
+  ignores its own `duration` and waits to be dismissed by a hand that cannot
+  reach it. Both are why the toasts were pulled the first time. `showUndoBar`
+  in `page_bar.dart` is the only place either is decided, and `undo_test.dart`
+  measures the bar against the pill rather than trusting a golden, which the
+  pill paints over.
+
 - **Nothing scolds.** Red is for destructive confirmation only, never for
   spending. A month that ended down is ordinary. There is no disappointed
   mascot pose, deliberately.
@@ -145,6 +155,7 @@ downloads.
 - [x] Total balance + per-account chips
 - [x] Eye toggle — masks every amount on the page, persisted
 - [x] Pinned shortcuts strip, one tap to add dated today, long press to unpin
+- [x] Both of those undoable for four seconds, from a bar that clears the pill
 - [x] Day / Week / Month segmented, pill slides between positions
 - [x] Period arrows, forward disabled at the present
 - [x] Credit / debit / net meter on one line
@@ -199,14 +210,12 @@ downloads.
 
 ## Known gaps — fix before new features
 
-- **No undo, anywhere.** The snackbars were removed on request and they carried
-  every undo path. Deleting asks first; adding from a pinned chip does not,
-  because the row lands at the top of RECENT where it can be opened and deleted.
-  If a mis-tap ever costs someone real work, this is the thing to fix. The
-  *model* is already there and unused: `removeTxn` returns the index it removed
-  from and `entry_sheet.dart` throws that away, and `insertTxnAt` has no caller
-  at all. What is missing is somewhere to put the offer, not the ability to
-  honour it.
+- **Undo covers the one-tap actions, not deleting.** Adding from a pinned chip
+  and unpinning one both offer UNDO for four seconds; deleting a transaction
+  asks first instead, which is the older and stronger guard. So `insertTxnAt`
+  is still the one piece of undo machinery with no caller — an undo on delete
+  would use it, and would mean rewriting "this cannot be undone" in the
+  confirmation, which is the part to think about rather than the code.
 - **Recurring rules cannot be edited** — only added and stopped. Changing rent
   means stopping one rule and creating another.
 - **`showPennyMoment` and `claimMoment` are never called,** so `Penny.focus` and
