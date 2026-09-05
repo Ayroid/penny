@@ -186,8 +186,13 @@ Future<void> _showGoal(
     case _Ask.take:
       // Taking money back out never celebrates, and never un-celebrates: the
       // milestones already seen stay claimed.
-      store.takeOut(goal, asked.amount, asked.accountId);
-      return;
+      return _confirmTakeOut(
+        context,
+        store,
+        goal,
+        asked.amount,
+        asked.accountId,
+      );
     case _Ask.put:
       store.putAside(goal, asked.amount, asked.accountId);
   }
@@ -286,30 +291,43 @@ class _ContributeSheetState extends State<_ContributeSheet> {
           ],
         ),
         const SizedBox(height: 14),
-        FilledButton(
-          onPressed: _amount <= 0
-              ? null
-              : () => Navigator.pop(context, (
-                  ask: _Ask.put,
-                  amount: _amount,
-                  accountId: _accountId,
-                )),
-          child: const Text('Put it aside'),
+        // Take out sits left, Put aside right: the sheet's default action lands
+        // under the thumb, and the two share one row instead of stacking.
+        Row(
+          children: [
+            if (status.saved > 0) ...[
+              Expanded(
+                child: OutlinedButton(
+                  // Capped at what the goal holds: it cannot hand back money
+                  // that was never put in it.
+                  onPressed: _amount <= 0 || _amount > status.saved
+                      ? null
+                      : () => Navigator.pop(context, (
+                          ask: _Ask.take,
+                          amount: _amount,
+                          accountId: _accountId,
+                        )),
+                  child: const Text('Take out'),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: FilledButton(
+                onPressed: _amount <= 0
+                    ? null
+                    : () => Navigator.pop(context, (
+                        ask: _Ask.put,
+                        amount: _amount,
+                        accountId: _accountId,
+                      )),
+                child: const Text('Put aside'),
+              ),
+            ),
+          ],
         ),
-        if (status.saved > 0)
-          TextButton(
-            // Capped at what the goal holds: it cannot hand back money that
-            // was never put in it.
-            onPressed: _amount <= 0 || _amount > status.saved
-                ? null
-                : () => Navigator.pop(context, (
-                    ask: _Ask.take,
-                    amount: _amount,
-                    accountId: _accountId,
-                  )),
-            child: const Text('Take it back out'),
-          ),
-        if (status.reached)
+        if (status.reached) ...[
+          const SizedBox(height: 10),
           TextButton(
             onPressed: () => Navigator.pop(context, (
               ask: _Ask.bought,
@@ -318,7 +336,12 @@ class _ContributeSheetState extends State<_ContributeSheet> {
             )),
             child: const Text('Bought it'),
           ),
-        TextButton(
+        ],
+        const SizedBox(height: 10),
+        // The same 52-high full-width shape as Put aside, at wash strength
+        // rather than filled: the two are the sheet's actions, and one of them
+        // reading as a footnote made the sheet look like it had one.
+        OutlinedButton(
           onPressed: () => Navigator.pop(context, (
             ask: _Ask.edit,
             amount: 0,
@@ -339,6 +362,45 @@ class _ContributeSheetState extends State<_ContributeSheet> {
 /// transfers that filled it stay in the ledger, because they happened.
 /// Cancelling the sheet costs the goal but not the money, which is the
 /// harmless way round.
+/// Taking money back out asks first.
+///
+/// Not because it is destructive — the transfer is an ordinary row and is
+/// undoable like any other — but because it is the one action on the sheet
+/// that undoes progress, and it sits a thumb's width from the button that
+/// makes it. The dialog names the amount and where it lands, which is the part
+/// a mis-tap gets wrong.
+Future<void> _confirmTakeOut(
+  BuildContext context,
+  PennyStore store,
+  Goal goal,
+  int minor,
+  String accountId,
+) async {
+  final into = store.accountById(accountId)?.name ?? 'the account';
+  final go = await showDialog<bool>(
+    context: context,
+    barrierColor: navy.withValues(alpha: 0.32),
+    builder: (context) => AlertDialog(
+      title: const Text('Take it back out?'),
+      content: Text(
+        '${store.show(rupees(minor))} moves out of ${goal.name} and into '
+        '$into, as an ordinary transfer in the ledger.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Leave it'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Take out'),
+        ),
+      ],
+    ),
+  );
+  if (go == true) store.takeOut(goal, minor, accountId);
+}
+
 Future<void> _confirmBought(
   BuildContext context,
   PennyStore store,
@@ -410,14 +472,27 @@ Future<void> _editGoal(BuildContext context, PennyStore store, Goal? existing) {
             onChanged: (v) => setSheet(() => target = v),
           ),
         ],
+        // Same 52-high full-width shape as Save, filled with the error colour
+        // at wash strength rather than at full: the entry sheet's Delete pairs
+        // with its Save exactly this way, and a destructive action should be
+        // findable, not the loudest thing on the sheet.
         footer: existing == null
             ? null
-            : TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _confirmDeleteGoal(host, store, existing);
+            : Builder(
+                builder: (context) {
+                  final scheme = Theme.of(context).colorScheme;
+                  return OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _confirmDeleteGoal(host, store, existing);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: scheme.error.withValues(alpha: 0.10),
+                      foregroundColor: scheme.error,
+                    ),
+                    child: const Text('Delete goal'),
+                  );
                 },
-                child: const Text('Delete goal'),
               ),
         onSave: name.text.trim().isEmpty || target <= 0
             ? null
@@ -459,7 +534,7 @@ Future<void> _confirmDeleteGoal(
       content: Text(
         'The ${store.show(rupeesWhole(store.statusOf(goal).saved))} stays in '
         'the Goals account and the transfers stay in the ledger — only the '
-        'goal goes. Take it back out first if you want it somewhere else.',
+        'goal goes. Take it out first if you want it somewhere else.',
       ),
       actions: [
         TextButton(

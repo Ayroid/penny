@@ -53,13 +53,18 @@ void main() {
     for (final tooltip in [
       'Settings',
       'Insights',
-      'Add a transaction',
       'Previous month',
       'Next month',
     ]) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
       expect(find.bySemanticsLabel(tooltip), findsWidgets, reason: tooltip);
     }
+
+    // The add button is the exception, and named rather than tooltipped: a
+    // tooltip is a long press, and a long press on that button floats the
+    // quick entries out instead.
+    expect(find.byTooltip('Add a transaction'), findsNothing);
+    expect(find.bySemanticsLabel('Add a transaction'), findsWidgets);
   });
 
   testWidgets('tap targets are never below 48', (tester) async {

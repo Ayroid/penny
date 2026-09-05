@@ -269,7 +269,7 @@ void main() {
 
       await tester.enterText(find.byType(TextField).first, '500');
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Put it aside'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Put aside'));
       await tester.pumpAndSettle();
 
       expect(store.txns, hasLength(1), reason: 'it went through the ledger');
@@ -279,6 +279,40 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Keep going'));
       await tester.pumpAndSettle();
       expect(find.text('50%'), findsOneWidget);
+    });
+
+    testWidgets('taking money back out asks first', (tester) async {
+      phoneView(tester);
+      final store = await emptyStore();
+      final cash = store.accounts.first;
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 50000, cash.id);
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      Future<void> askFor(String amount) async {
+        await tester.tap(find.text('Phone'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).first, amount);
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Take out'));
+        await tester.pumpAndSettle();
+      }
+
+      // Backing out of the question leaves the money where it was — the point
+      // of asking at all, on a button a thumb's width from Put aside.
+      await askFor('200');
+      expect(find.text('Take it back out?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Leave it'));
+      await tester.pumpAndSettle();
+      expect(store.statusOf(g).saved, 50000);
+
+      await askFor('200');
+      await tester.tap(find.widgetWithText(TextButton, 'Take out'));
+      await tester.pumpAndSettle();
+      expect(store.statusOf(g).saved, 30000);
+      expect(store.balanceOf(cash.id), greaterThan(-50000));
     });
 
     testWidgets('a finished goal reads as ready, and only then',

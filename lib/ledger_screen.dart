@@ -92,6 +92,8 @@ class _LedgerPageState extends State<LedgerPage> {
       floatingActionButton: AddButton(
         tooltip: 'Add a transaction',
         onPressed: () => showEntrySheet(context, store),
+        // Held rather than tapped, it floats the quick entries.
+        store: store,
       ),
       body: SafeArea(
         bottom: false,

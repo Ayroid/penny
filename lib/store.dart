@@ -353,13 +353,14 @@ class Rule {
   );
 }
 
-/// A transaction the person has chosen to keep one tap away.
+/// A transaction the person has chosen to keep one hold away — a quick entry,
+/// floated out of the add button.
 ///
-/// Curated, never inferred. Guessing at shortcuts from recent history sounds
+/// Curated, never inferred. Guessing at these from recent history sounds
 /// helpful and is not: two entries that differ only by account look identical
-/// on a chip, so the strip fills with apparent duplicates, and a row you
+/// on a chip, so the row fills with apparent duplicates, and a thing you
 /// happened to enter twice outranks the one you actually want. This is a thing
-/// you pin on purpose.
+/// you save on purpose.
 class Shortcut {
   Shortcut({
     String? id,
@@ -379,7 +380,7 @@ class Shortcut {
   String? toAccountId;
   String note;
 
-  /// The same shortcut, ignoring identity — so pinning a thing twice does not
+  /// The same shortcut, ignoring identity — so saving a thing twice does not
   /// leave two chips that cannot be told apart.
   bool sameAs(Shortcut other) =>
       kind == other.kind &&
@@ -400,7 +401,7 @@ class Shortcut {
     note: note,
   );
 
-  /// The shortcut [txn] would become if it were pinned.
+  /// The shortcut [txn] would become if it were saved.
   factory Shortcut.of(Txn txn) => Shortcut(
     kind: txn.kind,
     amountMinor: txn.amountMinor,
@@ -910,7 +911,7 @@ class PennyStore extends ChangeNotifier {
     _commit();
   }
 
-  /// Pin [shortcut], unless the same thing is already pinned. Returns whether
+  /// Save [shortcut], unless the same thing is already saved. Returns whether
   /// anything was added.
   bool addShortcut(Shortcut shortcut) {
     if (shortcuts.any((s) => s.sameAs(shortcut))) return false;
@@ -924,12 +925,7 @@ class PennyStore extends ChangeNotifier {
     _commit();
   }
 
-  void insertShortcutAt(int index, Shortcut shortcut) {
-    shortcuts.insert(index.clamp(0, shortcuts.length), shortcut);
-    _commit();
-  }
-
-  /// The pinned shortcut matching [txn], if there is one.
+  /// The saved shortcut matching [txn], if there is one.
   Shortcut? shortcutFor(Txn txn) {
     final candidate = Shortcut.of(txn);
     for (final s in shortcuts) {

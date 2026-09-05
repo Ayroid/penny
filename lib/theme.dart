@@ -182,10 +182,17 @@ ThemeData appTheme({required bool dark}) {
       focusedBorder: _softBorder(accent, width: 1.5),
     ),
     // Primary action only — the brand asks that the sprout stay meaningful.
+    //
+    // Disabled is stated, not left to Material's onSurface washes: those land
+    // a grey slab beside the accent-wash secondary and the pair stops reading
+    // as one row. Both buttons go to the sunk ground with a faded ink label —
+    // same shape, same ground, obviously inert.
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: accent,
         foregroundColor: onAccentConst,
+        disabledBackgroundColor: sunk,
+        disabledForegroundColor: muted.withValues(alpha: 0.6),
         elevation: 0,
         minimumSize: const Size.fromHeight(52),
         textStyle: t(15, FontWeight.w700, color: onAccentConst),
@@ -197,6 +204,8 @@ ThemeData appTheme({required bool dark}) {
       style: OutlinedButton.styleFrom(
         foregroundColor: fg,
         backgroundColor: dark ? sproutSoftDark : sproutSoft,
+        disabledBackgroundColor: sunk,
+        disabledForegroundColor: muted.withValues(alpha: 0.6),
         minimumSize: const Size.fromHeight(52),
         textStyle: t(15, FontWeight.w700),
         side: BorderSide.none,

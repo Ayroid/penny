@@ -158,7 +158,7 @@ downloads.
 
 - **Deleting a goal does not move money.** The transfers stay, the money stays
   in Goals, and the dialog says so. Guessing which account it should go back to
-  would be inventing a transaction nobody asked for; "Take it back out" is
+  would be inventing a transaction nobody asked for; "Take out" is
   right there for the person who wants it elsewhere.
 
 - **A moment is claimed once ever, not once a day.** `claimMoment` was built
@@ -238,8 +238,9 @@ downloads.
 ### Overview
 - [x] Total balance + per-account chips
 - [x] Eye toggle — masks every amount in the app, persisted
-- [x] Pinned shortcuts strip, one tap to add dated today, long press to unpin
-- [x] Both of those undoable for four seconds, from a bar that clears the pill
+- [x] Quick entries, held out of the add button — drag onto one and let go, or
+      tap it once the row is up; adds dated today
+- [x] Undoable for four seconds, from a bar that clears the pill
 - [x] Day / Week / Month segmented, pill slides between positions
 - [x] Period arrows, forward disabled at the present
 - [x] Credit / debit / net meter on one line
@@ -274,14 +275,15 @@ downloads.
 - [x] Platform numeric keyboard, autofocused, decimal input formatter
 - [x] Spent / Earned / Moved, with the destination account for transfers
 - [x] Category, account, date pills; native date picker
-- [x] Pin toggle, reflecting what is already pinned
+- [x] Save-for-quick-add toggle, reflecting what is already saved
 - [x] Delete matches Save's shape and asks first, with the amount in the question
 - [x] And then offers UNDO for four seconds, back at the row's own place
 
 ### Settings
 - [x] Light / Dark / System
-- [x] Accounts, categories and recurring rules as sheets
+- [x] Accounts, categories, recurring rules and quick entries as sheets
 - [x] Recurring rules edited in place, not stopped and rebuilt
+- [x] Quick entries listed, edited and removed — the rule editor without a schedule
 - [x] Archive rather than delete for accounts and categories
 - [x] Colour and icon pickers
 - [x] Export a backup (JSON, shared as a file)

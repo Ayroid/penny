@@ -357,7 +357,7 @@ void main() {
     });
   });
 
-  group('pinned shortcuts', () {
+  group('quick entries', () {
     Future<(PennyStore, Shortcut)> withPin() async {
       final s = await seeded();
       final pin = Shortcut(
@@ -422,25 +422,6 @@ void main() {
           categoryId: pin.categoryId,
           accountId: pin.accountId);
       expect(s.shortcutFor(different), isNull);
-    });
-
-    test('unpinning and putting it back keeps the order', () async {
-      final s = await seeded();
-      final food = cat(s, 'Food & Drink'), cash = acc(s, 'Cash');
-      for (final note in ['chai', 'bus', 'lunch']) {
-        s.addShortcut(Shortcut(
-            kind: TxKind.expense,
-            amountMinor: 2000,
-            categoryId: food,
-            accountId: cash,
-            note: note));
-      }
-      final middle = s.shortcuts[1];
-      s.removeShortcut(middle);
-      expect(s.shortcuts.map((x) => x.note), ['chai', 'lunch']);
-
-      s.insertShortcutAt(1, middle);
-      expect(s.shortcuts.map((x) => x.note), ['chai', 'bus', 'lunch']);
     });
 
     test('pins survive a save and reload', () async {

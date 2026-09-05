@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:penny/home.dart';
@@ -83,7 +84,7 @@ void main() {
     await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Add a transaction').first);
+    await tester.tap(find.byType(FloatingActionButton).first);
     await tester.pumpAndSettle();
 
     // The amount field is the one that autofocuses, and it reads as rupees —
@@ -105,7 +106,7 @@ void main() {
     final store = await emptyStore();
     await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Add a transaction').first);
+    await tester.tap(find.byType(FloatingActionButton).first);
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, '450.50');
@@ -121,7 +122,7 @@ void main() {
     final store = await emptyStore();
     await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Add a transaction').first);
+    await tester.tap(find.byType(FloatingActionButton).first);
     await tester.pumpAndSettle();
 
     FilledButton add() =>
@@ -143,7 +144,7 @@ void main() {
     final store = await emptyStore();
     await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Add a transaction').first);
+    await tester.tap(find.byType(FloatingActionButton).first);
     await tester.pumpAndSettle();
 
     final field = find.byType(TextField).first;
@@ -164,7 +165,7 @@ void main() {
     final store = await emptyStore();
     await tester.pumpWidget(home(store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Add a transaction').first);
+    await tester.tap(find.byType(FloatingActionButton).first);
     await tester.pumpAndSettle();
 
     await tester.tap(find.bySemanticsLabel('Moved'));
@@ -341,6 +342,54 @@ void main() {
       expect(find.text('TOTAL BALANCE'), findsOneWidget);
     });
 
+    testWidgets('the lit tab pill travels with the swipe', (tester) async {
+      SharedPreferences.setMockInitialValues({'onboarded': true});
+      phone(tester);
+
+      await tester.pumpWidget(const App());
+      await tester.pumpAndSettle();
+
+      // The one box painted in the accent inside the bar. Three tabs each
+      // fading their own background — what this replaced — puts no box at full
+      // accent anywhere mid-swipe, and two of them half lit.
+      final accent = sproutOf(tester.element(find.byType(PageTabs)));
+      Rect litPill() => tester.getRect(find.descendant(
+            of: find.byType(PageTabs),
+            matching: find.byWidgetPredicate((w) =>
+                w is DecoratedBox &&
+                w.decoration is BoxDecoration &&
+                (w.decoration as BoxDecoration).color == accent),
+          ));
+
+      final onOverview = litPill();
+
+      final drag =
+          await tester.startGesture(tester.getCenter(find.byType(PageView)));
+      await drag.moveBy(const Offset(-30, 0)); // past the touch slop
+      await tester.pump();
+      await drag.moveBy(const Offset(-150, 0));
+      await tester.pump();
+
+      final midSwipe = litPill();
+      expect(midSwipe.left, greaterThan(onOverview.left),
+          reason: 'the pill moves with the finger, not once the page lands');
+      expect(midSwipe.width, closeTo(onOverview.width, 0.5),
+          reason: 'one pill travelling, not one shrinking while another grows');
+
+      // Let go short of the halfway mark and the page comes back, and so does
+      // the pill: it is the page's own offset, not a selection of its own.
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(litPill().left, onOverview.left);
+
+      // And a tap takes it the whole way, still as one box that moves.
+      await tester.tap(find.bySemanticsLabel('Goals'));
+      await tester.pumpAndSettle();
+      final onGoals = litPill();
+      expect(onGoals.left, greaterThan(midSwipe.left));
+      expect(onGoals.width, closeTo(onOverview.width, 0.5));
+    });
+
     testWidgets('switching theme rebuilds the shell', (tester) async {
       SharedPreferences.setMockInitialValues({'onboarded': true});
       await tester.pumpWidget(const App());
@@ -363,28 +412,34 @@ void main() {
     });
   });
 
-  group('pinned shortcuts', () {
-    /// Add a transaction through the sheet, with the pin toggled on.
-    Future<void> addPinned(WidgetTester tester, String amount) async {
-      await tester.tap(find.byTooltip('Add a transaction').first);
+  group('quick entries', () {
+    /// Add a transaction through the sheet, saved for quick add.
+    Future<void> saveEntry(WidgetTester tester, String amount) async {
+      await tester.tap(find.byType(FloatingActionButton).first);
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, amount);
       await tester.pumpAndSettle();
-      await tester.tap(find.bySemanticsLabel('Pin to the overview'));
+      await tester.tap(find.byTooltip('Save for quick add'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pumpAndSettle();
     }
 
-    testWidgets('nothing is pinned until the person pins it', (tester) async {
+    /// Hold the add button until the row floats out.
+    Future<void> holdAdd(WidgetTester tester) async {
+      await tester.longPress(find.byType(FloatingActionButton).first);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('nothing is saved until the person saves it', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
 
-      // Entering things does not conjure chips: the strip is curated, never
+      // Entering things does not conjure chips: the row is curated, never
       // guessed at from history.
-      await tester.tap(find.byTooltip('Add a transaction').first);
+      await tester.tap(find.byType(FloatingActionButton).first);
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, '20');
       await tester.pumpAndSettle();
@@ -393,45 +448,141 @@ void main() {
 
       expect(store.txns, hasLength(1));
       expect(store.shortcuts, isEmpty);
-      expect(find.text('PINNED'), findsNothing);
+
+      // And a hold on an empty list opens nothing, rather than an empty row
+      // that reads as a broken control.
+      await holdAdd(tester);
+      expect(find.bySemanticsLabel('Add Food & Drink, ₹20'), findsNothing);
     });
 
-    testWidgets('pinning puts it on the overview', (tester) async {
+    testWidgets('saving puts it behind the add button', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
 
-      await addPinned(tester, '20');
+      await saveEntry(tester, '20');
 
       expect(store.shortcuts, hasLength(1));
       expect(store.shortcuts.single.amountMinor, 2000);
-      expect(find.text('PINNED'), findsOneWidget);
+      // Not on the page until it is asked for.
+      expect(find.bySemanticsLabel('Add Food & Drink, ₹20'), findsNothing);
+
+      await holdAdd(tester);
       expect(find.bySemanticsLabel('Add Food & Drink, ₹20'), findsOneWidget);
     });
 
-    testWidgets('a pinned chip adds to today on one tap', (tester) async {
+    testWidgets('a chip adds to today on one tap', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
-      await addPinned(tester, '20');
+      await saveEntry(tester, '20');
 
+      await holdAdd(tester);
       await tester.tap(find.bySemanticsLabel('Add Food & Drink, ₹20'));
       await tester.pumpAndSettle();
 
       expect(store.txns, hasLength(2));
       expect(store.txns.first.amountMinor, 2000);
       expect(store.txns.first.day, dayKey(today()));
+      // And the row is gone with it — one pick, not a menu left standing.
+      expect(find.bySemanticsLabel('Add Food & Drink, ₹20'), findsNothing);
     });
 
-    testWidgets('adding from a chip is corrected in the ledger', (tester) async {
+    testWidgets('holding and releasing over a chip adds it', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
-      await addPinned(tester, '20');
+      await saveEntry(tester, '20');
 
+      // The Pinterest gesture: the finger never comes up between opening the
+      // row and choosing from it.
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byType(FloatingActionButton).first),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+
+      final chip = tester.getCenter(
+        find.bySemanticsLabel('Add Food & Drink, ₹20'),
+      );
+      await drag.moveTo(chip);
+      await tester.pumpAndSettle();
+      await drag.up();
+      await tester.pumpAndSettle();
+
+      expect(store.txns, hasLength(2));
+      expect(store.txns.first.amountMinor, 2000);
+    });
+
+    testWidgets('releasing where it opened leaves the row up', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await saveEntry(tester, '20');
+
+      // A hold that goes nowhere is a menu, not a mis-fire: nothing is added,
+      // and the chips stay to be tapped.
+      await holdAdd(tester);
+
+      expect(store.txns, hasLength(1));
+      expect(find.bySemanticsLabel('Add Food & Drink, ₹20'), findsOneWidget);
+    });
+
+    testWidgets('the row stays inside the screen, and survives a hover',
+        (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+
+      // A long amount and a short one: the pair that used to be laid out in a
+      // box the width of the screen, which both swallowed taps meant for the
+      // page behind it and had nowhere to put an entry that did not fit.
+      await saveEntry(tester, '13000');
+      await saveEntry(tester, '32');
+      await holdAdd(tester);
+
+      final button = tester.getRect(find.byType(FloatingActionButton).first);
+      final chips = [
+        tester.getRect(find.bySemanticsLabel('Add Food & Drink, ₹13,000')),
+        tester.getRect(find.bySemanticsLabel('Add Food & Drink, ₹32')),
+      ];
+      expect(chips.map((c) => c.right).reduce((a, b) => a > b ? a : b),
+          button.right,
+          reason: 'flush with the button, never off the edge beside it');
+      for (final chip in chips) {
+        expect(chip.left, greaterThanOrEqualTo(16.0));
+        expect(chip.bottom, lessThanOrEqualTo(button.top));
+      }
+
+      // And the hover that made a chip's own tooltip ask where it was, on a
+      // screen it could not yet be placed on. An assertion here is a failure:
+      // flutter_test fails a test on any exception the framework throws.
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(chips.first.center);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Tooltip), findsWidgets);
+    });
+
+    testWidgets('adding from a chip is corrected in the ledger', (
+      tester,
+    ) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await saveEntry(tester, '20');
+
+      await holdAdd(tester);
       await tester.tap(find.bySemanticsLabel('Add Food & Drink, ₹20'));
       await tester.pumpAndSettle();
       expect(store.txns, hasLength(2));
@@ -452,30 +603,14 @@ void main() {
       expect(store.txns, hasLength(1));
     });
 
-    testWidgets('long press unpins', (tester) async {
-      phone(tester);
-      final store = await emptyStore();
-      await tester.pumpWidget(home(store));
-      await tester.pumpAndSettle();
-      await addPinned(tester, '20');
-
-      await tester.longPress(find.bySemanticsLabel('Add Food & Drink, ₹20'));
-      await tester.pumpAndSettle();
-
-      expect(store.shortcuts, isEmpty);
-      expect(find.text('PINNED'), findsNothing);
-      expect(store.txns, hasLength(1),
-          reason: 'unpinning is not deleting — the transaction stays');
-    });
-
-    testWidgets('pinning the same thing twice leaves one chip', (tester) async {
+    testWidgets('saving the same thing twice leaves one chip', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
 
-      await addPinned(tester, '20');
-      await addPinned(tester, '20');
+      await saveEntry(tester, '20');
+      await saveEntry(tester, '20');
 
       // Two chips that cannot be told apart is exactly what the guessed
       // version got wrong.
@@ -483,24 +618,22 @@ void main() {
       expect(store.txns, hasLength(2));
     });
 
-    testWidgets('the toggle reflects what is already pinned', (tester) async {
+    testWidgets('the toggle reflects what is already saved', (tester) async {
       phone(tester);
       final store = await emptyStore();
       await tester.pumpWidget(home(store));
       await tester.pumpAndSettle();
-      await addPinned(tester, '20');
+      await saveEntry(tester, '20');
 
-      // Reopen that transaction from the RECENT list. Scoped by the row's own
-      // announcement, because the pinned chip carries the same words and
-      // tapping that would add another transaction instead of editing one.
-      // The overview's ListView builds lazily, so the RECENT rows are not in
-      // the tree until they are scrolled into it.
+      // Reopen that transaction from the RECENT list. The overview's ListView
+      // builds lazily, so the RECENT rows are not in the tree until they are
+      // scrolled into it.
       await scrollToRows(tester);
       await tester.tap(find.byType(TxnRow).first);
       await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('Pinned to the overview'), findsOneWidget);
+      expect(find.byTooltip('Saved for quick add'), findsOneWidget);
 
-      await tester.tap(find.bySemanticsLabel('Pinned to the overview'));
+      await tester.tap(find.byTooltip('Saved for quick add'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Save'));
       await tester.pumpAndSettle();

@@ -100,6 +100,14 @@ class _Body extends StatelessWidget {
                     ? 'Rent, salary, subscriptions'
                     : plural(store.rules.length, 'rule'),
                 onTap: () => _showRules(context, store),
+              ),
+              _Row(
+                icon: LucideIcons.bookmark,
+                label: 'Quick entries',
+                subtitle: store.shortcuts.isEmpty
+                    ? 'Hold the add button to use them'
+                    : plural(store.shortcuts.length, 'entry', 'entries'),
+                onTap: () => _showQuickEntries(context, store),
                 last: true,
               ),
             ],
@@ -537,6 +545,169 @@ Future<void> _confirmRemoveRule(
     ),
   );
   if (go == true) store.removeRule(rule);
+}
+
+// ── Quick entries ───────────────────────────────────────────────────────────
+
+/// The entries a hold on the add button floats out.
+///
+/// A quick entry is a [Rule] with the repeating taken out — same six fields,
+/// no frequency, no start day, and it never fires on its own. Kept a separate
+/// list rather than a rule that repeats never: half the fields on the row
+/// would be dead, and a Recurring list that mixes "this happens to me" with
+/// "I might tap this" tells you neither.
+Future<void> _showQuickEntries(BuildContext context, PennyStore store) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => ListenableBuilder(
+      listenable: store,
+      builder: (context, _) => ListSheet(
+        title: 'Quick entries',
+        onAdd: () => _editQuickEntry(context, store),
+        empty: store.shortcuts.isEmpty
+            ? 'Chai, the bus fare, the usual round — saved once, then a hold on the add button away.'
+            : null,
+        children: [
+          for (final e in store.shortcuts)
+            EditableRow(
+              icon: iconFor(
+                store.categoryById(e.categoryId)?.icon ?? defaultIcon,
+              ),
+              colour: catColorAt(
+                store.categoryById(e.categoryId)?.color ?? defaultCatColor,
+              ),
+              label: e.note.isEmpty
+                  ? store.categoryById(e.categoryId)?.name ?? 'Quick entry'
+                  : e.note,
+              trailing: rupeesWhole(e.amountMinor),
+              onTap: () => _editQuickEntry(context, store, e),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Add a quick entry, or edit [existing].
+///
+/// The rule editor without the schedule. Deleting one is not confirmed the way
+/// stopping a rule is: nothing it has already added goes anywhere, and it is
+/// one tap to save the same thing again.
+Future<void> _editQuickEntry(
+  BuildContext context,
+  PennyStore store, [
+  Shortcut? existing,
+]) {
+  final note = TextEditingController(text: existing?.note ?? '');
+  var amount = existing?.amountMinor ?? 0;
+  var kind = existing?.kind ?? TxKind.expense;
+  var categoryId =
+      existing?.categoryId ?? store.categoriesOf(TxKind.expense).first.id;
+  var accountId = existing?.accountId ?? store.liveAccounts.first.id;
+
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheet) {
+        final categories = store.categoriesOf(kind);
+        return SheetFrame(
+          title: existing == null ? 'New quick entry' : 'Edit quick entry',
+          children: [
+            Segmented<TxKind>(
+              options: const {
+                TxKind.expense: 'Spending',
+                TxKind.income: 'Income',
+              },
+              value: kind,
+              onChanged: (k) => setSheet(() {
+                kind = k;
+                categoryId = store.categoriesOf(k).first.id;
+              }),
+            ),
+            const SizedBox(height: 14),
+            AmountField(
+              value: amount,
+              positiveOnly: true,
+              onChanged: (v) => setSheet(() => amount = v),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: note,
+              decoration: const InputDecoration(hintText: 'Chai, Bus fare…'),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final c in categories)
+                  PickChip(
+                    label: c.name,
+                    icon: iconFor(c.icon),
+                    colour: catColorAt(c.color),
+                    selected: c.id == categoryId,
+                    onTap: () => setSheet(() => categoryId = c.id),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final a in store.liveAccounts)
+                  PickChip(
+                    label: a.name,
+                    icon: iconFor(a.icon),
+                    colour: catColorAt(a.color),
+                    selected: a.id == accountId,
+                    onTap: () => setSheet(() => accountId = a.id),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: amount <= 0
+                  ? null
+                  : () {
+                      if (existing == null) {
+                        store.addShortcut(
+                          Shortcut(
+                            kind: kind,
+                            amountMinor: amount,
+                            categoryId: categoryId,
+                            accountId: accountId,
+                            note: note.text.trim(),
+                          ),
+                        );
+                      } else {
+                        existing
+                          ..kind = kind
+                          ..amountMinor = amount
+                          ..categoryId = categoryId
+                          ..accountId = accountId
+                          ..note = note.text.trim();
+                        store.touch();
+                      }
+                      Navigator.pop(context);
+                    },
+              child: Text(existing == null ? 'Add entry' : 'Save'),
+            ),
+            if (existing != null)
+              TextButton(
+                onPressed: () {
+                  store.removeShortcut(existing);
+                  Navigator.pop(context);
+                },
+                child: const Text('Remove'),
+              ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 /// Add a rule, or edit [existing].

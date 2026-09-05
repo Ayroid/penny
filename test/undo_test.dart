@@ -25,7 +25,7 @@ void main() {
     return store;
   }
 
-  Shortcut pinOf(PennyStore store, String note, int amountMinor) => Shortcut(
+  Shortcut entryOf(PennyStore store, String note, int amountMinor) => Shortcut(
     kind: TxKind.expense,
     amountMinor: amountMinor,
     categoryId: store.categoriesOf(TxKind.expense).first.id,
@@ -33,7 +33,10 @@ void main() {
     note: note,
   );
 
-  Future<Shortcut> shellWithAPin(WidgetTester tester, PennyStore store) async {
+  Future<Shortcut> shellWithAnEntry(
+    WidgetTester tester,
+    PennyStore store,
+  ) async {
     tester.view
       ..physicalSize = const Size(1080, 2280)
       ..devicePixelRatio = 3.0
@@ -45,8 +48,8 @@ void main() {
       ..viewPadding = const FakeViewPadding(bottom: 144);
     addTearDown(tester.view.reset);
 
-    final pin = pinOf(store, 'Chai', 12000);
-    store.addShortcut(pin);
+    final entry = entryOf(store, 'Chai', 12000);
+    store.addShortcut(entry);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -55,15 +58,22 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    return pin;
+    return entry;
+  }
+
+  /// Hold the add button, then take the one chip that floats out.
+  Future<void> addFromTheRow(WidgetTester tester) async {
+    await tester.longPress(find.byType(FloatingActionButton).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Add Chai, ₹120'));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('the undo bar clears the tab pill', (tester) async {
     final store = await emptyStore();
-    await shellWithAPin(tester, store);
+    await shellWithAnEntry(tester, store);
 
-    await tester.tap(find.text('Chai'));
-    await tester.pumpAndSettle();
+    await addFromTheRow(tester);
 
     expect(find.text('UNDO'), findsOneWidget);
 
@@ -85,6 +95,11 @@ void main() {
       ),
     );
     expect(bar.bottom, lessThanOrEqualTo(pill.top));
+    // And just above it, not hanging a pill and a half up the screen: the
+    // `Scaffold` already lifts a floating bar clear of the add button, which
+    // sits on the pill's own line, so anything this app adds on top of that is
+    // counted twice.
+    expect(pill.top - bar.bottom, lessThan(tabBarHeight));
 
     // And within reach: tapped rather than only measured, because a widget
     // can be laid out clear of the pill and still sit under something else.
@@ -95,10 +110,9 @@ void main() {
 
   testWidgets('the undo bar leaves on its own', (tester) async {
     final store = await emptyStore();
-    await shellWithAPin(tester, store);
+    await shellWithAnEntry(tester, store);
 
-    await tester.tap(find.text('Chai'));
-    await tester.pumpAndSettle();
+    await addFromTheRow(tester);
     expect(find.text('UNDO'), findsOneWidget);
 
     // Nothing tapped and nothing swiped — only time passing.
@@ -108,23 +122,5 @@ void main() {
     expect(find.text('UNDO'), findsNothing);
     // Leaving is not undoing: what was added stays added.
     expect(store.txns, hasLength(1));
-  });
-
-  testWidgets('unpinning is undoable, back to where it was', (tester) async {
-    final store = await emptyStore();
-    final first = await shellWithAPin(tester, store);
-    final second = pinOf(store, 'Bus', 30000);
-    store.addShortcut(second);
-    await tester.pumpAndSettle();
-
-    await tester.longPress(find.text('Chai'));
-    await tester.pumpAndSettle();
-    expect(store.shortcuts.single.id, second.id);
-
-    await tester.tap(find.text('UNDO'));
-    await tester.pumpAndSettle();
-
-    // First again, not appended to the end.
-    expect(store.shortcuts.map((s) => s.id), [first.id, second.id]);
   });
 }

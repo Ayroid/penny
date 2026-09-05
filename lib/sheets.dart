@@ -297,6 +297,7 @@ class EditSheet extends StatelessWidget {
             onPressed: nameController.text.trim().isEmpty ? null : onSave,
             child: const Text('Save'),
           ),
+          if (footer != null) const SizedBox(height: 10),
           ?footer,
         ],
       ),
@@ -332,9 +333,15 @@ class PickChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(11, 9, 13, 9),
           decoration: BoxDecoration(
-            color: colour.withValues(alpha: selected ? 0.28 : 0.10),
+            color: colour.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(pill),
-            border: selected ? Border.all(color: colour, width: 1.5) : null,
+            // The ring is always drawn, transparent when unselected: a border
+            // that appears on selection grows the pill by 3px and shoves the
+            // row along. Selection is the outline and nothing else.
+            border: Border.all(
+              color: selected ? colour : Colors.transparent,
+              width: 1.5,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -345,7 +352,7 @@ class PickChip extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 12.5,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),

@@ -93,9 +93,9 @@ class _EntrySheetState extends State<_EntrySheet> {
     text: widget.existing?.note ?? widget.initialNote,
   );
 
-  /// Whether this should be kept one tap away on the overview. Reflects what
-  /// is already pinned when editing, so the toggle is never a lie.
-  late bool _pinned =
+  /// Whether this should be kept one hold away on the add button. Reflects
+  /// what is already saved when editing, so the toggle is never a lie.
+  late bool _saved =
       widget.existing != null &&
       widget.store.shortcutFor(widget.existing!) != null;
 
@@ -146,8 +146,9 @@ class _EntrySheetState extends State<_EntrySheet> {
         ),
       );
     } else {
-      // Un-pin against the row as it was, before the edits land — otherwise a
-      // changed amount leaves the old shortcut orphaned on the overview.
+      // Matched against the row as it was, before the edits land — otherwise
+      // a changed amount leaves the old quick entry orphaned behind the
+      // button.
       final existing = widget.store.shortcutFor(t);
       if (existing != null) widget.store.removeShortcut(existing);
 
@@ -162,7 +163,7 @@ class _EntrySheetState extends State<_EntrySheet> {
       widget.store.touch();
     }
 
-    if (_pinned) {
+    if (_saved) {
       widget.store.addShortcut(
         Shortcut(
           kind: _kind,
@@ -287,7 +288,7 @@ class _EntrySheetState extends State<_EntrySheet> {
                       }
                     }),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
 
                   // The amount, typed on the platform's own numeric keyboard.
                   //
@@ -297,45 +298,87 @@ class _EntrySheetState extends State<_EntrySheet> {
                   // two drift apart across the screen. Sized to its content
                   // instead, so the pair stays centred together as digits are
                   // typed.
-                  Center(
-                    // A maximum amount is 11 mono characters at 40px, which is
-                    // within a hair of the sheet's width on a narrow phone.
-                    // Scaling down beats overflowing.
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(rupee, style: _amountStyle(scheme.secondary)),
-                          const SizedBox(width: 4),
-                          IntrinsicWidth(
-                            child: TextField(
-                              controller: _amount,
-                              autofocus: widget.existing == null,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              inputFormatters: [amountInputFormatter],
-                              onChanged: (_) => setState(() {}),
-                              style: _amountStyle(scheme.onSurface),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                filled: false,
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                contentPadding: EdgeInsets.zero,
-                                hintText: '0',
-                                hintStyle: _amountStyle(scheme.secondary),
+                  // Quick-add rides at the right of the amount line, as an
+                  // icon alone — the label lives in its tooltip, which a long
+                  // press shows. Saving is opt-in and explicit: the row behind
+                  // the add button is what the person chose to keep, never
+                  // what the app guessed they meant. Offered here because the
+                  // moment a thing has just been typed is the cheapest moment
+                  // to say "again next time" — the settings list is for
+                  // tidying them up later, not inventing them from nothing.
+                  //
+                  // Stacked rather than in a Row so the amount stays centred
+                  // on the sheet rather than on what the icon leaves of it.
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Center(
+                        // A maximum amount is 11 mono characters at 40px, which is
+                        // within a hair of the sheet's width on a narrow phone.
+                        // Scaling down beats overflowing.
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                rupee,
+                                style: _amountStyle(scheme.secondary),
                               ),
+                              const SizedBox(width: 4),
+                              IntrinsicWidth(
+                                child: TextField(
+                                  controller: _amount,
+                                  autofocus: widget.existing == null,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  inputFormatters: [amountInputFormatter],
+                                  onChanged: (_) => setState(() {}),
+                                  style: _amountStyle(scheme.onSurface),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    filled: false,
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                    hintText: '0',
+                                    hintStyle: _amountStyle(scheme.secondary),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.topRight,
+                        // Nudged up into the gap under the kind bar: the
+                        // amount is the tallest thing on the sheet, and an
+                        // icon sitting level with it reads as hanging off it.
+                        child: Transform.translate(
+                          offset: const Offset(0, -20),
+                          child: IconButton(
+                            tooltip: _saved
+                                ? 'Saved for quick add'
+                                : 'Save for quick add',
+                            onPressed: () => setState(() => _saved = !_saved),
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(
+                              _saved
+                                  ? LucideIcons.bookmarkCheck
+                                  : LucideIcons.bookmark,
+                              size: 20,
+                              color: _saved ? scheme.primary : scheme.secondary,
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 20),
 
@@ -399,30 +442,12 @@ class _EntrySheetState extends State<_EntrySheet> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Pinning is opt-in and explicit: the overview's strip is
-                  // what the person chose to keep, never what the app guessed
-                  // they meant.
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: _Pick(
-                      icon: _pinned
-                          ? LucideIcons.bookmarkCheck
-                          : LucideIcons.bookmark,
-                      label: _pinned
-                          ? 'Pinned to the overview'
-                          : 'Pin to the overview',
-                      color: _pinned ? null : scheme.secondary,
-                      onTap: () => setState(() => _pinned = !_pinned),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
                   FilledButton(
                     onPressed: _valid ? _save : null,
                     child: Text(widget.existing == null ? 'Add' : 'Save'),
                   ),
                   if (widget.existing != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 10),
                     // Same 52-high full-width shape as Save, so the two read
                     // as a pair rather than one being an afterthought — but
                     // filled with the error colour at wash strength, never at

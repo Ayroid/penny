@@ -177,6 +177,47 @@ void main() {
         tester, 'overview', HomePage(store: await seeded(), onSettings: () {}));
   });
 
+  // The quick entries, held open. The row paints over the page and only ever
+  // exists mid-gesture, so a golden is the one place its layout is pinned:
+  // right-aligned out of the button, clear of the tab pill.
+  testWidgets('quick entries', (tester) async {
+    final store = await seeded();
+    for (final (note, minor) in [('Chai', 2000), ('Bus', 3000)]) {
+      store.addShortcut(
+        Shortcut(
+          kind: TxKind.expense,
+          amountMinor: minor,
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.liveAccounts.first.id,
+          note: note,
+        ),
+      );
+    }
+
+    tester.view
+      ..physicalSize = const Size(1080, 2280)
+      ..devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: appTheme(dark: false),
+        home: HomePage(store: store, onSettings: () {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await settleImages(tester);
+
+    await tester.longPress(find.byType(FloatingActionButton).first);
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/quick_entries.png'),
+    );
+  });
+
   testWidgets('overview dark', (tester) async {
     await shot(tester, 'overview_dark',
         HomePage(store: await seeded(), onSettings: () {}),
