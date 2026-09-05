@@ -28,6 +28,7 @@ flutter:
   assets:
     - assets/mascot/
     - assets/splash/
+    - assets/images/
   # assets/icon/ is deliberately not bundled — flutter_launcher_icons reads it
   # at build time and the app never loads it at runtime.
   fonts:

@@ -158,7 +158,7 @@ downloads.
 
 - **Deleting a goal does not move money.** The transfers stay, the money stays
   in Goals, and the dialog says so. Guessing which account it should go back to
-  would be inventing a transaction nobody asked for; "Take out" is
+  would be inventing a transaction nobody asked for; "Withdraw" is
   right there for the person who wants it elsewhere.
 
 - **A moment is claimed once ever, not once a day.** `claimMoment` was built

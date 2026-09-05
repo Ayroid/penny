@@ -97,7 +97,7 @@ class ShellBar extends StatelessWidget {
         // The page's own hero card carries the total now, and a screen that
         // says the same number twice reads as a screen that has nothing else
         // to say.
-        return ('Goals', 'What you are saving for');
+        return ('Goals', 'Turn your dreams into progress 🌱');
     }
   }
 

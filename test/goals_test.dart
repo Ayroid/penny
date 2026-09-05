@@ -336,7 +336,7 @@ void main() {
 
       await tester.enterText(find.byType(TextField).first, '500');
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Put aside'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pumpAndSettle();
 
       expect(store.txns, hasLength(1), reason: 'it went through the ledger');
@@ -374,14 +374,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('only has'), findsOneWidget);
       final button = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Put aside'),
+        find.widgetWithText(FilledButton, 'Add'),
       );
       expect(button.onPressed, isNull, reason: 'more than the account holds');
 
       // What the goal still needs, on the other hand, only trims.
       await tester.enterText(find.byType(TextField).first, '150');
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Put aside'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pumpAndSettle();
       expect(store.statusOf(store.goals.single).saved, 15000);
     });
@@ -401,20 +401,20 @@ void main() {
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).first, amount);
         await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(OutlinedButton, 'Take out'));
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Withdraw'));
         await tester.pumpAndSettle();
       }
 
       // Backing out of the question leaves the money where it was — the point
-      // of asking at all, on a button a thumb's width from Put aside.
+      // of asking at all, on a button a thumb's width from Add.
       await askFor('200');
-      expect(find.text('Take it back out?'), findsOneWidget);
+      expect(find.text('Withdraw from this goal?'), findsOneWidget);
       await tester.tap(find.widgetWithText(TextButton, 'Leave it'));
       await tester.pumpAndSettle();
       expect(store.statusOf(g).saved, 50000);
 
       await askFor('200');
-      await tester.tap(find.widgetWithText(TextButton, 'Take out'));
+      await tester.tap(find.widgetWithText(TextButton, 'Withdraw'));
       await tester.pumpAndSettle();
       expect(store.statusOf(g).saved, 30000);
       expect(store.balanceOf(cash.id), greaterThan(-50000));
@@ -458,9 +458,9 @@ void main() {
         reason: 'the store is untouched',
       );
 
-      // The hero adds up every goal rather than reading one of them: the
-      // second ₹1,000 is the funded goal's own line.
-      expect(find.text('₹1,000'), findsNWidgets(2));
+      // The hero adds up every goal rather than reading one of them.
+      expect(find.text('₹1,000'), findsOneWidget);
+      expect(find.text('₹1,000 of ₹1,000'), findsOneWidget);
       expect(
         find.textContaining('₹5,000 to go across 2 goals'),
         findsOneWidget,
