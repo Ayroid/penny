@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'icons.dart';
 import 'money.dart';
+import 'page_bar.dart';
 import 'store.dart';
 import 'theme.dart';
 
@@ -10,20 +11,43 @@ import 'theme.dart';
 ///
 /// One sheet for both, as in Wick: a create form and an edit form that drift
 /// apart is two bugs waiting rather than one screen.
+///
+/// [initialAmountMinor], [initialNote] and [initialAccountId] prefill a new
+/// entry — a goal being closed knows what it cost, what it was for, and that
+/// the money is sitting in the goals account.
 Future<void> showEntrySheet(
   BuildContext context,
   PennyStore store, {
   Txn? existing,
   TxKind initialKind = TxKind.expense,
-}) {
-  return showModalBottomSheet<void>(
+  int initialAmountMinor = 0,
+  String initialNote = '',
+  String? initialAccountId,
+}) async {
+  // The sheet pops with what it deleted, if it deleted anything: the undo bar
+  // has to be raised from a context that outlives the sheet, and this one —
+  // the page that opened it — does.
+  final deleted = await showModalBottomSheet<({Txn txn, int at})>(
     context: context,
     isScrollControlled: true,
     builder: (context) => _EntrySheet(
       store: store,
       existing: existing,
       initialKind: existing?.kind ?? initialKind,
+      initialAmountMinor: initialAmountMinor,
+      initialNote: initialNote,
+      initialAccountId: initialAccountId,
     ),
+  );
+  if (deleted == null || !context.mounted) return;
+
+  showUndoBar(
+    context,
+    'Deleted ${rupees(deleted.txn.amountMinor)}',
+    // Back where it was in the list, not on the end: the ledger is sorted by
+    // day and then by entry order, and appending would move the row to the
+    // bottom of its own day.
+    onUndo: () => store.insertTxnAt(deleted.at, deleted.txn),
   );
 }
 
@@ -32,11 +56,17 @@ class _EntrySheet extends StatefulWidget {
     required this.store,
     required this.existing,
     required this.initialKind,
+    required this.initialAmountMinor,
+    required this.initialNote,
+    required this.initialAccountId,
   });
 
   final PennyStore store;
   final Txn? existing;
   final TxKind initialKind;
+  final int initialAmountMinor;
+  final String initialNote;
+  final String? initialAccountId;
 
   @override
   State<_EntrySheet> createState() => _EntrySheetState();
@@ -46,16 +76,22 @@ class _EntrySheetState extends State<_EntrySheet> {
   late TxKind _kind = widget.initialKind;
 
   late final _amount = TextEditingController(
-    text: amountFieldText(widget.existing?.amountMinor ?? 0),
+    text: amountFieldText(
+      widget.existing?.amountMinor ?? widget.initialAmountMinor,
+    ),
   );
   late DateTime _day = widget.existing != null
       ? parseDay(widget.existing!.day)
       : today();
   late String? _categoryId = widget.existing?.categoryId;
   late String _accountId =
-      widget.existing?.accountId ?? widget.store.liveAccounts.first.id;
+      widget.existing?.accountId ??
+      widget.initialAccountId ??
+      widget.store.liveAccounts.first.id;
   late String? _toAccountId = widget.existing?.toAccountId;
-  late final _note = TextEditingController(text: widget.existing?.note ?? '');
+  late final _note = TextEditingController(
+    text: widget.existing?.note ?? widget.initialNote,
+  );
 
   /// Whether this should be kept one tap away on the overview. Reflects what
   /// is already pinned when editing, so the toggle is never a lie.
@@ -142,9 +178,12 @@ class _EntrySheetState extends State<_EntrySheet> {
     Navigator.of(context).pop();
   }
 
-  /// Deleting is irreversible and there is no undo anywhere in the app, so it
-  /// asks. The amount is in the question: "delete this?" is easy to say yes to
-  /// on the wrong row.
+  /// Deleting asks first, and then offers to take it back.
+  ///
+  /// Both, not one or the other: the dialog is what stops a mis-tap on the
+  /// wrong row, and it carries the amount for exactly that reason. The undo
+  /// that follows is four seconds long, which catches the second kind of
+  /// mistake — the one you only see once the row is gone.
   Future<void> _confirmDelete() async {
     final txn = widget.existing!;
     final category = widget.store.categoryById(txn.categoryId)?.name ?? '';
@@ -157,7 +196,7 @@ class _EntrySheetState extends State<_EntrySheet> {
           '${rupees(txn.amountMinor)}'
           '${category.isEmpty ? '' : ' · $category'}'
           '${txn.note.isEmpty ? '' : ' · ${txn.note}'}'
-          '\n\nThis cannot be undone.',
+          '\n\nYou can undo this for a few seconds.',
         ),
         actions: [
           TextButton(
@@ -176,8 +215,8 @@ class _EntrySheetState extends State<_EntrySheet> {
     );
 
     if (gone != true || !mounted) return;
-    widget.store.removeTxn(txn);
-    if (mounted) Navigator.of(context).pop();
+    final at = widget.store.removeTxn(txn);
+    if (mounted) Navigator.of(context).pop((txn: txn, at: at));
   }
 
   Future<void> _pickDate() async {

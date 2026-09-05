@@ -3,10 +3,14 @@
 Working checklist for what's built, what's broken, and what's next. Tick a box
 when it ships. Keep entries one line; the reasoning lives in the code comments.
 
-**Status:** 17 source files · 6,244 lines · 208 tests · 11 goldens · 4 runtime deps
-**Verified on:** Android device — runs, rupee and mono render, data survives a cold kill
-**Last release:** none — no `key.properties`, so release builds fall back to debug keys
-**Current build:** arm64 **18.3 MB** (`tool/release.sh`, obfuscated + split-debug-info)
+**Status:** 19 source files · 7,177 lines · 234 tests · 13 goldens · 4 runtime deps
+**Verified on:** Android device — runs, rupee and mono render, data survives a cold
+kill. That was *before* Goals and the bottom dock; those two are covered by tests
+and goldens and have not been on hardware yet
+**Last release:** none yet, but release builds are signed — `android/penny-release.jks`
+exists and `apksigner` reports `CN=Penny`, not the debug key
+**Current build:** arm64 **19.5 MB**, armeabi-v7a 16.7 MB, x86_64 21.0 MB
+(`--split-per-abi --obfuscate --split-debug-info`, the flags `tool/release.sh` uses)
 
 **On build size:** ship `--split-per-abi` or the `.aab`, never the plain APK.
 A fat `app-release.apk` carries all three ABIs and roughly doubles what anyone
@@ -16,7 +20,7 @@ downloads.
 |---|---|
 | Mascot poses downscaled 1254 → 512 px, palette-quantised | **5.29 MB** |
 | Character sheet moved out of `assets/` into `art/` | ~1.4 MB |
-| `--obfuscate --split-debug-info` (in `tool/release.sh`) | not measured — both builds write to the same path, so it needs measuring on purpose |
+| `--obfuscate --split-debug-info` (in `tool/release.sh`) | still not isolated — the 19.5 MB above includes it, but no plain build was made alongside to subtract |
 | `lucide_icons_flutter` for ~120 icons | costs ~0.7 MB — see `lib/icons.dart` |
 
 ---
@@ -93,6 +97,32 @@ downloads.
   Computing March from a February clamped to the 28th would pin the rule to the
   28th forever.
 
+- **The bottom of the screen is a dock: the pill, and the add button.** The
+  add button used to be a filled disc in the top bar of every page. It is now a
+  `FloatingActionButton` at the bottom right, where the thumb is and where Wick
+  keeps its own — one per page, adding the thing that page is about. The pill
+  centres itself in what is *left* of the width rather than in all of it:
+  centred on the screen a three-tab pill reaches ~232 and the button starts at
+  284, so the two would overlap on a narrow phone.
+
+- **`endFloat` already lands on the pill's line, and a test can hide that.**
+  A floating FAB's margin is measured from `minViewPadding`, so on a device
+  with a gesture strip it sits exactly where the pill's `SafeArea` puts the
+  pill. A custom location "fixing" this was written and thrown away: the only
+  thing wrong was the harness. `tester.view.padding` alone leaves `viewPadding`
+  at zero, which the pill reads but the FAB does not — set **both**, or the
+  golden shows a button 48px below where it lands on a phone.
+
+- **Insights is a page you open, not a tab you swipe to.** It is where you go
+  with a question; the ledger and the goals are where you go to do something.
+  It sits next to Settings in the overview's bar, which is also what made room
+  for a fourth destination without a fourth tab.
+
+- **No scrollbars.** Flutter draws one beside every scroll view on a desktop
+  platform. Penny is a phone app whose longest list is an icon grid; the
+  `scrollBehavior` on the `MaterialApp` turns them off everywhere, and nothing
+  about the scrolling changes.
+
 - **An undo lives in a snackbar above the tab pill, and leaves on its own.**
   The pill is a `Stack` overlay, so the `Scaffold` laying a floating snackbar
   out does not know it is there and puts the bar underneath it. On top of that,
@@ -102,6 +132,59 @@ downloads.
   in `page_bar.dart` is the only place either is decided, and `undo_test.dart`
   measures the bar against the pill rather than trusting a golden, which the
   pill paints over.
+
+- **Putting money aside moves it, and the ledger records that.** Goals shipped
+  first as an earmark — a `savedMinor` on the goal, no transaction — on the
+  grounds that a jar in the real world is not a ledger entry. That was wrong in
+  practice: the account you spend from still showed the money as available, so
+  the promise had no teeth. A contribution is now an ordinary **transfer** out
+  of the account it came from and into a **Goals** account, tagged with
+  `Txn.goalId`. The source account is genuinely lighter, the total balance does
+  not move (a transfer nets to zero), and the row is in the ledger to find,
+  edit and delete like any other.
+
+- **A goal holds no number of its own.** What is in it is summed from those
+  transfers by `statusOf` — into the goals account counts up, out of it counts
+  down. Two places for one figure is two places to disagree: delete a
+  contribution in the ledger and the goal is simply smaller, with nothing to
+  reconcile. Same reasoning as `balanceOf`, and the same ponytail note about
+  caching if a very long ledger ever stutters.
+
+- **The Goals account is made on first use, never seeded.** An empty "Goals"
+  chip on a fresh ledger answers a question nobody asked. It is an ordinary
+  account otherwise — it has a balance, appears on the overview, and is where
+  "Bought it" spends from — marked only by `Account.forGoals`, which is how the
+  app finds it again after someone renames it.
+
+- **Deleting a goal does not move money.** The transfers stay, the money stays
+  in Goals, and the dialog says so. Guessing which account it should go back to
+  would be inventing a transaction nobody asked for; "Take it back out" is
+  right there for the person who wants it elsewhere.
+
+- **A moment is claimed once ever, not once a day.** `claimMoment` was built
+  as a daily guard and its only real caller is goal milestones, which are
+  crossed once. `claimMilestone` claims every milestone at or below where a
+  goal stands and returns only the highest new one, so nothing to full in one
+  contribution celebrates once — and taking money back out and putting it in
+  again does not replay it.
+
+- **Deleting asks *and* offers an undo.** The dialog stops a mis-tap on the
+  wrong row and carries the amount for that reason; the four-second undo
+  catches the mistake you only see once the row is gone. `insertTxnAt` puts it
+  back at its index rather than appending, because the ledger sorts by day and
+  then by entry order.
+
+- **Hiding covers every screen, and the row decides for itself.** `TxnRow`
+  reads `store.hideAmounts` rather than taking a parameter — the ledger used
+  to pass nothing, so "hide amounts" masked the overview and left every figure
+  one swipe away. `store.show(...)` is the one place a figure becomes a mask.
+
+- **One sheet kit, in `sheets.dart`.** The frame, the list with its add button,
+  the row, the name/colour/icon editor, the chip and the amount field started
+  out private to `settings.dart`. Goals needed the same five things, and a
+  second copy is how two editors drift into disagreeing about what "Save" does.
+  The amount field echoes nothing back under itself either — the figure is
+  already in the field, with the ₹ in front of it.
 
 - **Nothing scolds.** Red is for destructive confirmation only, never for
   spending. A month that ended down is ordinary. There is no disappointed
@@ -132,7 +215,7 @@ downloads.
 - [x] Injected clock (`lib/clock.dart`) so dates are testable
 - [x] Corrupt-blob tolerance — starts empty, doesn't crash
 - [x] Orphaned rows adopted, not dropped; dangling transfers degrade safely
-- [x] Once-a-day guard (`claimMoment`, persisted) — built, not yet called
+- [x] Once-ever guard (`claimMoment`, persisted), called by goal milestones
 - [x] Three platform targets (android, ios, linux)
 
 ### Brand & mascot
@@ -145,7 +228,8 @@ downloads.
 - [x] Android 12+ splash (`values-v31`), cream in both themes
 
 ### Shell
-- [x] Three swipeable pages under a floating tab pill
+- [x] Three swipeable pages under a floating tab pill, Insights opened from the bar
+- [x] Add button at the bottom right, on the pill's line, one per page
 - [x] Tab pill tracks the swipe fraction, not just the settled page
 - [x] Tab pill sits above the system gesture strip, not inside it
 - [x] Splash gate → onboarding or shell
@@ -153,7 +237,7 @@ downloads.
 
 ### Overview
 - [x] Total balance + per-account chips
-- [x] Eye toggle — masks every amount on the page, persisted
+- [x] Eye toggle — masks every amount in the app, persisted
 - [x] Pinned shortcuts strip, one tap to add dated today, long press to unpin
 - [x] Both of those undoable for four seconds, from a bar that clears the pill
 - [x] Day / Week / Month segmented, pill slides between positions
@@ -163,6 +247,17 @@ downloads.
 - [x] Recent rows grouped under day headers
 - [x] Empty state leads with the action, not with three zero cards
 
+### Goals
+- [x] A page of what you are saving for, target and progress each
+- [x] Putting money aside is a real transfer, out of the account you pick
+- [x] A Goals account, made on first use, holding what has been put aside
+- [x] Taking it back out picks a destination, and is capped at what is in there
+- [x] Progress summed from the ledger, so deleting a row shrinks the goal
+- [x] Milestones at 25/50/75/100% — `showPennyMoment`, claimed once ever
+- [x] "Bought it" closes the goal and spends out of Goals, prefilled
+- [x] Set aside and free, under the balance on the overview
+- [x] Goals ride the backup like everything else
+
 ### Ledger
 - [x] Every transaction, newest first, grouped by day
 - [x] Day net per header, running balance per row
@@ -170,6 +265,7 @@ downloads.
 - [x] All / Debit / Credit filter
 
 ### Insights
+- [x] Opened from the overview's bar, with a back arrow rather than a tab
 - [x] Credit-and-debit trend, 6 periods, with a colour key
 - [x] Category breakdown with share bars, largest first
 - [x] "₹X more than last month", silent when there is nothing to compare
@@ -180,14 +276,20 @@ downloads.
 - [x] Category, account, date pills; native date picker
 - [x] Pin toggle, reflecting what is already pinned
 - [x] Delete matches Save's shape and asks first, with the amount in the question
+- [x] And then offers UNDO for four seconds, back at the row's own place
 
 ### Settings
 - [x] Light / Dark / System
 - [x] Accounts, categories and recurring rules as sheets
+- [x] Recurring rules edited in place, not stopped and rebuilt
 - [x] Archive rather than delete for accounts and categories
 - [x] Colour and icon pickers
 - [x] Export a backup (JSON, shared as a file)
 - [x] Import a backup — confirmed first, decoded as UTF-8, dialog on failure
+
+### Release
+- [x] `key.properties` + a 4096-bit keystore; release builds are properly signed
+- [x] `tool/release.sh` refuses to build without one, rather than shipping debug keys
 
 ### Money
 - [x] Integer paise throughout
@@ -210,27 +312,28 @@ downloads.
 
 ## Known gaps — fix before new features
 
-- **Undo covers the one-tap actions, not deleting.** Adding from a pinned chip
-  and unpinning one both offer UNDO for four seconds; deleting a transaction
-  asks first instead, which is the older and stronger guard. So `insertTxnAt`
-  is still the one piece of undo machinery with no caller — an undo on delete
-  would use it, and would mean rewriting "this cannot be undone" in the
-  confirmation, which is the part to think about rather than the code.
-- **Recurring rules cannot be edited** — only added and stopped. Changing rent
-  means stopping one rule and creating another.
-- **`showPennyMoment` and `claimMoment` are never called,** so `Penny.focus` and
-  `Penny.complete` ship in the APK and are never drawn. Savings goals are what
-  that machinery is waiting for.
-- **Hiding covers the overview only.** The ledger and insights show every
-  amount. Defensible — those are screens you go to on purpose — but it is a
-  half-promise if someone expects "hide amounts" to mean the app.
-- **No release signing.** `android/key.properties` does not exist, so release
-  builds fall back to debug keys and cannot be shipped to anyone.
-- **`archivesName` in `build.gradle.kts` does not name the APKs.** The Flutter
-  Gradle plugin writes `build/app/outputs/flutter-apk/app-<abi>-release.apk`
-  itself. `tool/release.sh` renames on copy, so `releases/<version>/` is where
-  `penny-<version>-<abi>.apk` comes from. **Wick's comment claims otherwise and
-  is wrong there too.**
+- **The eye lives only on the overview.** Hiding now covers every screen, but
+  the one switch that turns it off is on the first tab — masked on the ledger
+  means swiping back to unmask. A second eye in the ledger's bar, or a row in
+  settings, whichever gets asked for first.
+- **Cancelling the entry sheet after "Bought it" loses the goal.** The goal
+  closes before the sheet opens, so backing out leaves the money sitting in
+  Goals with nothing pointing at it. Recoverable by hand, but it is a re-typed
+  goal.
+- **Insights is only reachable from the overview.** From the ledger or goals
+  you swipe back first. Same shape as the eye above, and the same fix if it
+  ever grates: put it in the bar of every tab page.
+- **A goal cannot be paused or archived**, only deleted. Same shape as rules,
+  and the same question: does anything actually want it?
+- **A contribution is always dated today.** The sheet has no date picker — the
+  row it writes is an ordinary transfer, so the fix is to open it in the ledger
+  and change the date there. Fine until someone catches up a month of saving in
+  one sitting.
+- **Nothing stops a goal being spent out of Goals by accident.** The account is
+  ordinary, so an expense can be entered against it like any other, and the
+  goals then quietly claim more than the account holds. `statusOf` floors at
+  zero rather than going negative; a warning on the page would be the honest
+  fix if it ever happens.
 
 ## Backlog
 
@@ -239,9 +342,7 @@ downloads.
    The cheapest entry shortcut left, and it needs no new model.
 2. **CSV export.** *An hour.* JSON is the backup; CSV is what goes to a
    spreadsheet or an accountant. Ten lines beside `exportJson`.
-3. **Edit a recurring rule.** *Half a day.* Closes a gap above. The editor
-   already exists for creating one — it needs to open on an existing rule.
-4. **Calendar month view.** *A day.* A month grid showing each day's net rather
+3. **Calendar month view.** *A day.* A month grid showing each day's net rather
    than shaded spend. The heatmap proves the layout; this is a different cell.
    The highest "oh, *that* is where it went" per unit of work.
 
@@ -256,9 +357,6 @@ downloads.
 - **Budgets.** Per category, per month. Over budget **dims** and says "₹1,200
   over" in ink — never red, never a warning icon. The most-requested money-app
   feature and the easiest one to get wrong.
-- **Savings goals.** A target, a date, a linked account. Celebrates at
-  25/50/75/100% — which is what `showPennyMoment` and the two unused poses are
-  for.
 - **Bill reminders.** `flutter_local_notifications`; Wick's `reminders.dart`
   ports almost wholesale — schedule 7 ahead, rebuild idempotently, no isolate.
 - **Split a transaction.** Do it before there is a lot of data, or not at all.
@@ -292,12 +390,18 @@ downloads.
 
 ```sh
 flutter run                       # debug
-flutter test                      # 205 unit, widget and golden tests
+flutter test                      # 234 unit, widget and golden tests
 flutter test --update-goldens     # only when a pixel change is deliberate
 flutter analyze
 python3 tool/make_icon.py         # after changing anything in art/
 dart run flutter_launcher_icons   # after the above
-tool/release.sh                   # split-per-abi APKs into releases/
+tool/release.sh                   # split-per-abi APKs into releases/, signed
+# A new machine needs its own keystore before that will run:
+# keytool -genkey -v -keystore android/penny-release.jks -keyalg RSA \
+#   -keysize 4096 -validity 10000 -alias penny
+# then android/key.properties with storePassword / keyPassword / keyAlias /
+# storeFile=penny-release.jks. Both files are gitignored; back up the .jks —
+# lose it and no future build can update an installed Penny.
 ```
 
 Source art lives in `art/` and is never bundled; everything in `assets/icon/`,

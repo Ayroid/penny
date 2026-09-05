@@ -38,8 +38,11 @@ void main() {
       ..physicalSize = const Size(1080, 2280)
       ..devicePixelRatio = 3.0
       // The strip Android keeps for its own back-swipe. Left at zero, a
-      // margin that ignores the inset would pass this.
-      ..padding = const FakeViewPadding(bottom: 144);
+      // margin that ignores the inset would pass this — and `viewPadding` as
+      // well as `padding`, because the two are the same thing on a device with
+      // no keyboard up, and it is `viewPadding` that a floating button reads.
+      ..padding = const FakeViewPadding(bottom: 144)
+      ..viewPadding = const FakeViewPadding(bottom: 144);
     addTearDown(tester.view.reset);
 
     final pin = pinOf(store, 'Chai', 12000);

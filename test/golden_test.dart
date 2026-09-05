@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:penny/analytics_screen.dart';
 import 'package:penny/clock.dart';
 import 'package:penny/entry_sheet.dart';
+import 'package:penny/goals_screen.dart';
 import 'package:penny/home.dart';
 import 'package:penny/ledger_screen.dart';
 import 'package:penny/onboarding.dart';
@@ -227,6 +228,27 @@ void main() {
   testWidgets('insights dark', (tester) async {
     await shot(tester, 'insights_dark', InsightsPage(store: await seeded()),
         dark: true);
+  });
+
+  testWidgets('goals', (tester) async {
+    final store = await seeded();
+    final phone = Goal(name: 'Phone', targetMinor: 4500000, icon: 'phone');
+    final trip = Goal(name: 'Trip home', targetMinor: 1200000, icon: 'plane');
+    store
+      ..addGoal(phone)
+      ..addGoal(trip);
+    store.putAside(phone, 1800000, store.accounts[1].id);
+    store.putAside(trip, 1200000, store.accounts[1].id);
+    await shot(tester, 'goals', GoalsPage(store: store));
+  });
+
+  /// The empty state is the one screen that draws `Penny.focus`, the pose that
+  /// shipped in the APK for months without a caller.
+  testWidgets('goals empty', (tester) async {
+    final store = PennyStore();
+    await store.load();
+    store.seedDefaults();
+    await shot(tester, 'goals_empty', GoalsPage(store: store));
   });
 
   testWidgets('settings', (tester) async {

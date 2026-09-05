@@ -6,6 +6,8 @@ import 'package:penny/analytics_screen.dart';
 import 'package:penny/main.dart';
 import 'package:penny/money.dart';
 import 'package:penny/onboarding.dart';
+import 'package:penny/page_bar.dart';
+import 'package:penny/settings.dart';
 import 'package:penny/store.dart';
 import 'package:penny/txn_row.dart';
 import 'package:penny/theme.dart';
@@ -434,8 +436,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.txns, hasLength(2));
 
-      // There is no toast and no undo: the row lands at the top of RECENT, and
-      // a mis-tap is corrected by opening it and deleting it like any other.
+      // The undo bar covers the top of RECENT while it is up, and this is
+      // about the other correction — the one you make after it has gone, by
+      // opening the row and deleting it like any other.
+      await tester.pump(undoLinger);
+      await tester.pumpAndSettle();
       await scrollToRows(tester);
       await tester.tap(find.byType(TxnRow).first);
       await tester.pumpAndSettle();
@@ -594,6 +599,32 @@ void main() {
       // which is most of what was being hidden.
       expect(masked, '••••••');
     });
+
+    testWidgets('the ledger is masked too, not just the overview',
+        (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      store.addTxn(Txn(
+          kind: TxKind.expense,
+          amountMinor: 45000,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+          note: 'lunch'));
+      await store.setHideAmounts(true);
+
+      await tester.pumpWidget(wrap(ListenableBuilder(
+        listenable: store,
+        builder: (context, _) => LedgerPage(store: store),
+      )));
+      await tester.pumpAndSettle();
+
+      // Every figure on the screen: the row, its running balance and the day's
+      // net. "Hide amounts" that covers one screen is half a promise.
+      expect(find.textContaining('₹'), findsNothing);
+      expect(find.text(maskedAmount), findsWidgets);
+      expect(find.textContaining('lunch'), findsOneWidget);
+    });
   });
 
   testWidgets('hiding survives a relaunch', (tester) async {
@@ -667,6 +698,88 @@ void main() {
 
       expect(store.txns, isEmpty);
       expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+    });
+
+    testWidgets('and then offers to put it back where it was', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      final category = store.categoriesOf(TxKind.expense).first.id;
+      final account = store.accounts.first.id;
+      // Three on one day, so undoing the middle one has somewhere wrong to
+      // land: appended, it would come back at the bottom of its own day.
+      for (final note in ['bus', 'lunch', 'chai']) {
+        store.addTxn(Txn(
+            kind: TxKind.expense,
+            amountMinor: 45000,
+            day: dayKey(today()),
+            categoryId: category,
+            accountId: account,
+            note: note));
+      }
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await scrollToRows(tester);
+
+      await tester.tap(find.textContaining('lunch'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns.map((t) => t.note), ['chai', 'bus']);
+
+      await tester.tap(find.text('UNDO'));
+      await tester.pumpAndSettle();
+      expect(store.txns.map((t) => t.note), ['chai', 'lunch', 'bus']);
+    });
+
+    testWidgets('the question no longer claims it cannot be undone',
+        (tester) async {
+      phone(tester);
+      await withOne(tester);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('cannot be undone'), findsNothing);
+      expect(find.textContaining('undo this'), findsOneWidget);
+    });
+  });
+
+  group('recurring rules', () {
+    testWidgets('a rule is edited in place, not stopped and rebuilt',
+        (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      store.addRule(Rule(
+          kind: TxKind.expense,
+          amountMinor: 1200000,
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+          note: 'Rent',
+          startDay: dayKey(today())));
+
+      await tester.pumpWidget(wrap(SettingsScreen(store: store)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Recurring'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Rent'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit rule'), findsOneWidget);
+
+      // The amount is the first field on the sheet, the note the last.
+      await tester.enterText(find.byType(TextField).first, '15000');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(store.rules, hasLength(1), reason: 'edited, not replaced');
+      expect(store.rules.single.amountMinor, 1500000);
+      expect(store.rules.single.note, 'Rent');
     });
   });
 

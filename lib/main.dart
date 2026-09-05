@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'analytics_screen.dart';
+import 'goals_screen.dart';
 import 'home.dart';
 import 'ledger_screen.dart';
 import 'onboarding.dart';
@@ -76,6 +76,13 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return MaterialApp(
       title: 'Penny',
       debugShowCheckedModeBanner: false,
+      // No scrollbars, anywhere. Flutter draws one beside every scroll view on
+      // a desktop platform, and Penny is a phone app whose lists — the icon
+      // grid especially — are short enough to flick. The scrolling itself is
+      // untouched.
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        scrollbars: false,
+      ),
       theme: appTheme(dark: false),
       darkTheme: appTheme(dark: true),
       themeMode: store.themeMode,
@@ -155,7 +162,7 @@ class _RootScreenState extends State<RootScreen> {
                 onSettings: () => openSettings(context, widget.store),
               ),
               LedgerPage(store: widget.store),
-              InsightsPage(store: widget.store),
+              GoalsPage(store: widget.store),
             ],
           ),
           PageTabs(

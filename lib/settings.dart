@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'icons.dart';
 import 'money.dart';
 import 'recurring.dart';
+import 'sheets.dart';
 import 'store.dart';
 import 'theme.dart';
 
@@ -279,12 +280,12 @@ Future<void> _showAccounts(BuildContext context, PennyStore store) {
     isScrollControlled: true,
     builder: (context) => ListenableBuilder(
       listenable: store,
-      builder: (context, _) => _ListSheet(
+      builder: (context, _) => ListSheet(
         title: 'Accounts',
         onAdd: () => _editAccount(context, store, null),
         children: [
           for (final a in store.accounts)
-            _EditableRow(
+            EditableRow(
               icon: iconFor(a.icon),
               colour: catColorAt(a.color),
               label: a.name,
@@ -312,7 +313,7 @@ Future<void> _editAccount(
     context: context,
     isScrollControlled: true,
     builder: (context) => StatefulBuilder(
-      builder: (context, setSheet) => _EditSheet(
+      builder: (context, setSheet) => EditSheet(
         title: existing == null ? 'New account' : 'Edit account',
         nameController: name,
         nameHint: 'Cash, Bank, Card…',
@@ -326,18 +327,20 @@ Future<void> _editAccount(
             style: Theme.of(context).textTheme.labelSmall,
           ),
           const SizedBox(height: 6),
-          _SignedAmountField(
+          AmountField(
             value: opening,
             onChanged: (v) => setSheet(() => opening = v),
           ),
         ],
-        onArchive: existing == null
+        footer: existing == null
             ? null
-            : () {
-                store.setAccountArchived(existing, !existing.archived);
-                Navigator.pop(context);
-              },
-        archived: existing?.archived ?? false,
+            : TextButton(
+                onPressed: () {
+                  store.setAccountArchived(existing, !existing.archived);
+                  Navigator.pop(context);
+                },
+                child: Text(existing.archived ? 'Bring back' : 'Archive'),
+              ),
         onSave: name.text.trim().isEmpty
             ? null
             : () {
@@ -373,7 +376,7 @@ Future<void> _showCategories(BuildContext context, PennyStore store) {
     isScrollControlled: true,
     builder: (context) => ListenableBuilder(
       listenable: store,
-      builder: (context, _) => _ListSheet(
+      builder: (context, _) => ListSheet(
         title: 'Categories',
         onAdd: () => _editCategory(context, store, null),
         children: [
@@ -386,7 +389,7 @@ Future<void> _showCategories(BuildContext context, PennyStore store) {
               ),
             ),
             for (final c in store.categories.where((c) => c.kind == kind))
-              _EditableRow(
+              EditableRow(
                 icon: iconFor(c.icon),
                 colour: catColorAt(c.color),
                 label: c.name,
@@ -414,7 +417,7 @@ Future<void> _editCategory(
     context: context,
     isScrollControlled: true,
     builder: (context) => StatefulBuilder(
-      builder: (context, setSheet) => _EditSheet(
+      builder: (context, setSheet) => EditSheet(
         title: existing == null ? 'New category' : 'Edit category',
         nameController: name,
         nameHint: 'Groceries, Rent, Salary…',
@@ -433,13 +436,15 @@ Future<void> _editCategory(
               onChanged: (k) => setSheet(() => kind = k),
             ),
         ],
-        onArchive: existing == null
+        footer: existing == null
             ? null
-            : () {
-                store.setCategoryArchived(existing, !existing.archived);
-                Navigator.pop(context);
-              },
-        archived: existing?.archived ?? false,
+            : TextButton(
+                onPressed: () {
+                  store.setCategoryArchived(existing, !existing.archived);
+                  Navigator.pop(context);
+                },
+                child: Text(existing.archived ? 'Bring back' : 'Archive'),
+              ),
         onSave: name.text.trim().isEmpty
             ? null
             : () {
@@ -474,7 +479,7 @@ Future<void> _showRules(BuildContext context, PennyStore store) {
     isScrollControlled: true,
     builder: (context) => ListenableBuilder(
       listenable: store,
-      builder: (context, _) => _ListSheet(
+      builder: (context, _) => ListSheet(
         title: 'Recurring',
         onAdd: () => _editRule(context, store),
         empty: store.rules.isEmpty
@@ -482,7 +487,7 @@ Future<void> _showRules(BuildContext context, PennyStore store) {
             : null,
         children: [
           for (final r in store.rules)
-            _EditableRow(
+            EditableRow(
               icon: iconFor(store.categoryById(r.categoryId)?.icon ?? 'repeat'),
               colour: catColorAt(
                 store.categoryById(r.categoryId)?.color ?? defaultCatColor,
@@ -492,7 +497,7 @@ Future<void> _showRules(BuildContext context, PennyStore store) {
                   : r.note,
               trailing: '${rupeesWhole(r.amountMinor)} · ${r.freq.name}',
               archived: !r.active,
-              onTap: () => _confirmRemoveRule(context, store, r),
+              onTap: () => _editRule(context, store, r),
             ),
         ],
       ),
@@ -500,6 +505,9 @@ Future<void> _showRules(BuildContext context, PennyStore store) {
   );
 }
 
+/// Stopping a rule removes it. The rows it has already produced are ordinary
+/// transactions and stay where they are — a rule is a template, not a claim on
+/// its own history.
 Future<void> _confirmRemoveRule(
   BuildContext context,
   PennyStore store,
@@ -531,14 +539,28 @@ Future<void> _confirmRemoveRule(
   if (go == true) store.removeRule(rule);
 }
 
-Future<void> _editRule(BuildContext context, PennyStore store) {
-  final note = TextEditingController();
-  var amount = 0;
-  var kind = TxKind.expense;
-  var freq = Freq.monthly;
-  var categoryId = store.categoriesOf(TxKind.expense).first.id;
-  var accountId = store.liveAccounts.first.id;
-  var start = today();
+/// Add a rule, or edit [existing].
+///
+/// One sheet for both, as the entry sheet is for transactions. Editing changes
+/// what the rule produces *next*: rows it has already added are ordinary
+/// transactions and are left alone, which is why changing rent no longer means
+/// stopping one rule and inventing another.
+Future<void> _editRule(
+  BuildContext context,
+  PennyStore store, [
+  Rule? existing,
+]) {
+  // The list sheet underneath, which outlives this one — a dialog opened from
+  // the editor's own context after popping it has no navigator to open in.
+  final host = context;
+  final note = TextEditingController(text: existing?.note ?? '');
+  var amount = existing?.amountMinor ?? 0;
+  var kind = existing?.kind ?? TxKind.expense;
+  var freq = existing?.freq ?? Freq.monthly;
+  var categoryId =
+      existing?.categoryId ?? store.categoriesOf(TxKind.expense).first.id;
+  var accountId = existing?.accountId ?? store.liveAccounts.first.id;
+  var start = existing != null ? parseDay(existing.startDay) : today();
 
   return showModalBottomSheet<void>(
     context: context,
@@ -546,8 +568,8 @@ Future<void> _editRule(BuildContext context, PennyStore store) {
     builder: (context) => StatefulBuilder(
       builder: (context, setSheet) {
         final categories = store.categoriesOf(kind);
-        return _SheetFrame(
-          title: 'New rule',
+        return SheetFrame(
+          title: existing == null ? 'New rule' : 'Edit rule',
           children: [
             Segmented<TxKind>(
               options: const {
@@ -561,7 +583,7 @@ Future<void> _editRule(BuildContext context, PennyStore store) {
               }),
             ),
             const SizedBox(height: 14),
-            _SignedAmountField(
+            AmountField(
               value: amount,
               positiveOnly: true,
               onChanged: (v) => setSheet(() => amount = v),
@@ -587,7 +609,7 @@ Future<void> _editRule(BuildContext context, PennyStore store) {
               runSpacing: 8,
               children: [
                 for (final c in categories)
-                  _Chip(
+                  PickChip(
                     label: c.name,
                     icon: iconFor(c.icon),
                     colour: catColorAt(c.color),
@@ -602,7 +624,7 @@ Future<void> _editRule(BuildContext context, PennyStore store) {
               runSpacing: 8,
               children: [
                 for (final a in store.liveAccounts)
-                  _Chip(
+                  PickChip(
                     label: a.name,
                     icon: iconFor(a.icon),
                     colour: catColorAt(a.color),
@@ -630,442 +652,48 @@ Future<void> _editRule(BuildContext context, PennyStore store) {
               onPressed: amount <= 0
                   ? null
                   : () {
-                      store.addRule(
-                        Rule(
-                          kind: kind,
-                          amountMinor: amount,
-                          categoryId: categoryId,
-                          accountId: accountId,
-                          note: note.text.trim(),
-                          freq: freq,
-                          startDay: dayKey(start),
-                        ),
-                      );
+                      if (existing == null) {
+                        store.addRule(
+                          Rule(
+                            kind: kind,
+                            amountMinor: amount,
+                            categoryId: categoryId,
+                            accountId: accountId,
+                            note: note.text.trim(),
+                            freq: freq,
+                            startDay: dayKey(start),
+                          ),
+                        );
+                      } else {
+                        existing
+                          ..kind = kind
+                          ..amountMinor = amount
+                          ..categoryId = categoryId
+                          ..accountId = accountId
+                          ..note = note.text.trim()
+                          ..freq = freq
+                          ..startDay = dayKey(start);
+                        store.touch();
+                      }
+                      // A rule moved into the past owes rows the moment it is
+                      // saved, not on the next launch. `lastRunDay` is left
+                      // where it is, so nothing already materialised repeats.
                       materialiseDue(store);
                       Navigator.pop(context);
                     },
-              child: const Text('Add rule'),
+              child: Text(existing == null ? 'Add rule' : 'Save'),
             ),
+            if (existing != null)
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _confirmRemoveRule(host, store, existing);
+                },
+                child: const Text('Stop this rule'),
+              ),
           ],
         );
       },
     ),
   );
-}
-
-// ── Shared sheet furniture ──────────────────────────────────────────────────
-
-class _SheetFrame extends StatelessWidget {
-  const _SheetFrame({required this.title, required this.children, this.action});
-
-  final String title;
-  final List<Widget> children;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-          ),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.outline,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      ?action,
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  ...children,
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ListSheet extends StatelessWidget {
-  const _ListSheet({
-    required this.title,
-    required this.children,
-    required this.onAdd,
-    this.empty,
-  });
-
-  final String title;
-  final List<Widget> children;
-  final VoidCallback onAdd;
-  final String? empty;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SheetFrame(
-      title: title,
-      action: RoundIconButton(
-        icon: LucideIcons.plus,
-        tooltip: 'Add',
-        filled: true,
-        onPressed: onAdd,
-      ),
-      children: [
-        if (empty != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Text(
-              empty!,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ...children,
-      ],
-    );
-  }
-}
-
-class _EditableRow extends StatelessWidget {
-  const _EditableRow({
-    required this.icon,
-    required this.colour,
-    required this.label,
-    required this.onTap,
-    this.trailing,
-    this.archived = false,
-  });
-
-  final IconData icon;
-  final Color colour;
-  final String label;
-  final String? trailing;
-  final VoidCallback onTap;
-  final bool archived;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Opacity(
-      // Archived dims rather than disappears — it is still yours, just retired.
-      opacity: archived ? 0.45 : 1,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: colour.withValues(
-                    alpha: isDark(context) ? 0.15 : 0.12,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 16, color: colour),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              if (trailing != null)
-                Text(trailing!, style: mono(12, color: scheme.secondary)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EditSheet extends StatelessWidget {
-  const _EditSheet({
-    required this.title,
-    required this.nameController,
-    required this.nameHint,
-    required this.colour,
-    required this.icon,
-    required this.onColour,
-    required this.onIcon,
-    required this.onSave,
-    this.extra = const [],
-    this.onArchive,
-    this.archived = false,
-  });
-
-  final String title;
-  final TextEditingController nameController;
-  final String nameHint;
-  final int colour;
-  final String icon;
-  final ValueChanged<int> onColour;
-  final ValueChanged<String> onIcon;
-  final VoidCallback? onSave;
-  final List<Widget> extra;
-  final VoidCallback? onArchive;
-  final bool archived;
-
-  @override
-  Widget build(BuildContext context) {
-    return StatefulBuilder(
-      builder: (context, setSheet) => _SheetFrame(
-        title: title,
-        children: [
-          TextField(
-            controller: nameController,
-            autofocus: nameController.text.isEmpty,
-            textCapitalization: TextCapitalization.words,
-            onChanged: (_) => setSheet(() {}),
-            decoration: InputDecoration(hintText: nameHint),
-          ),
-          const SizedBox(height: 14),
-          if (extra.isNotEmpty) ...[...extra, const SizedBox(height: 14)],
-          Text('COLOUR', style: Theme.of(context).textTheme.labelSmall),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (var i = 0; i < catColors.length; i++)
-                Semantics(
-                  button: true,
-                  selected: i == colour,
-                  label: catColors[i].name,
-                  excludeSemantics: true,
-                  child: GestureDetector(
-                    onTap: () => onColour(i),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: catColors[i].value,
-                        shape: BoxShape.circle,
-                        border: i == colour
-                            ? Border.all(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                width: 2.5,
-                              )
-                            : null,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text('ICON', style: Theme.of(context).textTheme.labelSmall),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 168,
-            child: SingleChildScrollView(
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final key in iconByKey.keys)
-                    Semantics(
-                      button: true,
-                      selected: key == icon,
-                      label: key,
-                      excludeSemantics: true,
-                      child: GestureDetector(
-                        onTap: () => onIcon(key),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: key == icon
-                                ? catColorAt(colour).withValues(alpha: 0.22)
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            iconFor(key),
-                            size: 18,
-                            color: key == icon
-                                ? catColorAt(colour)
-                                : Theme.of(context).colorScheme.secondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          FilledButton(
-            onPressed: nameController.text.trim().isEmpty ? null : onSave,
-            child: const Text('Save'),
-          ),
-          if (onArchive != null)
-            TextButton(
-              onPressed: onArchive,
-              child: Text(archived ? 'Bring back' : 'Archive'),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.icon,
-    required this.colour,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color colour;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(11, 9, 13, 9),
-          decoration: BoxDecoration(
-            color: colour.withValues(alpha: selected ? 0.28 : 0.10),
-            borderRadius: BorderRadius.circular(pill),
-            border: selected ? Border.all(color: colour, width: 1.5) : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: colour),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A rupee amount, typed on the platform's numeric keyboard.
-///
-/// Rupees with an optional decimal, the way the field's own ₹ implies — this
-/// used to read the digits as paise, so typing 100 showed "₹ 100" and meant
-/// ₹1.00. Parsed once by [parseRupees] and held as an int thereafter.
-class _SignedAmountField extends StatefulWidget {
-  const _SignedAmountField({
-    required this.value,
-    required this.onChanged,
-    this.positiveOnly = false,
-  });
-
-  final int value;
-  final ValueChanged<int> onChanged;
-  final bool positiveOnly;
-
-  @override
-  State<_SignedAmountField> createState() => _SignedAmountFieldState();
-}
-
-class _SignedAmountFieldState extends State<_SignedAmountField> {
-  late final _controller = TextEditingController(
-    text: amountFieldText(widget.value.abs()),
-  );
-  late bool _negative = widget.value < 0;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _emit() {
-    final minor = parseRupees(_controller.text) ?? 0;
-    widget.onChanged(_negative ? -minor : minor);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (!widget.positiveOnly)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: RoundIconButton(
-              icon: _negative ? LucideIcons.minus : LucideIcons.plus,
-              tooltip: _negative ? 'Negative' : 'Positive',
-              onPressed: () {
-                setState(() => _negative = !_negative);
-                _emit();
-              },
-            ),
-          ),
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [amountInputFormatter],
-            onChanged: (_) => setState(_emit),
-            decoration: InputDecoration(
-              hintText: '0',
-              prefixText: '$rupee ',
-              helperText: rupees(widget.value, signed: true),
-              helperStyle: mono(
-                11,
-                color: Theme.of(context).colorScheme.secondary,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }

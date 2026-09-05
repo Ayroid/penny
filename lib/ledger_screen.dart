@@ -89,6 +89,10 @@ class _LedgerPageState extends State<LedgerPage> {
     }
 
     return Scaffold(
+      floatingActionButton: AddButton(
+        tooltip: 'Add a transaction',
+        onPressed: () => showEntrySheet(context, store),
+      ),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -98,14 +102,6 @@ class _LedgerPageState extends State<LedgerPage> {
               subtitle: rows.length == all.length
                   ? '${all.length} ${all.length == 1 ? 'entry' : 'entries'}'
                   : '${rows.length} of ${all.length}',
-              actions: [
-                RoundIconButton(
-                  icon: LucideIcons.plus,
-                  tooltip: 'Add a transaction',
-                  filled: true,
-                  onPressed: () => showEntrySheet(context, store),
-                ),
-              ],
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
@@ -179,7 +175,9 @@ class _LedgerPageState extends State<LedgerPage> {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  rupeesWhole(item.net, signed: true),
+                                  store.show(
+                                    rupeesWhole(item.net, signed: true),
+                                  ),
                                   style: mono(
                                     11,
                                     color: Theme.of(
@@ -210,5 +208,4 @@ class _LedgerPageState extends State<LedgerPage> {
       ),
     );
   }
-
 }

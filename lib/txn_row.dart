@@ -17,7 +17,6 @@ class TxnRow extends StatelessWidget {
     required this.txn,
     this.onTap,
     this.showBalance,
-    this.hideAmount = false,
   });
 
   final PennyStore store;
@@ -27,14 +26,11 @@ class TxnRow extends StatelessWidget {
   /// Running balance after this row, for the ledger. Absent on the overview.
   final int? showBalance;
 
-  /// Mask the figures. Set on the overview, which is the screen glanced at in
-  /// public; the ledger is somewhere you go on purpose.
-  final bool hideAmount;
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final hideAmount = store.hideAmounts;
     final category = store.categoryById(txn.categoryId);
     final account = store.accountById(txn.accountId);
 

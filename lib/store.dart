@@ -105,6 +105,7 @@ class Txn {
     this.toAccountId,
     this.note = '',
     this.ruleId,
+    this.goalId,
     String? createdAt,
   }) : id = id ?? newId(),
        createdAt = createdAt ?? DateTime.now().toIso8601String();
@@ -139,6 +140,12 @@ class Txn {
   /// rewrites history.
   String? ruleId;
 
+  /// Set when this transfer is money put aside for, or taken back out of, a
+  /// [Goal]. The row is an ordinary transfer either way; the id is what lets a
+  /// goal add up what is in it, and deleting the row here takes the money back
+  /// out of the goal rather than leaving the two disagreeing.
+  String? goalId;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'kind': kind.name,
@@ -149,6 +156,7 @@ class Txn {
     if (toAccountId != null) 'toAccount': toAccountId,
     if (note.isNotEmpty) 'note': note,
     if (ruleId != null) 'rule': ruleId,
+    if (goalId != null) 'goal': goalId,
     'createdAt': createdAt,
   };
 
@@ -164,6 +172,7 @@ class Txn {
     toAccountId: j['toAccount'] as String?,
     note: j['note'] as String? ?? '',
     ruleId: j['rule'] as String?,
+    goalId: j['goal'] as String?,
     createdAt: j['createdAt'] as String?,
   );
 }
@@ -218,12 +227,18 @@ class Account {
     this.color = defaultCatColor,
     this.openingBalanceMinor = 0,
     this.archived = false,
+    this.forGoals = false,
   }) : id = id ?? newId();
 
   final String id;
   String name;
   String icon;
   int color;
+
+  /// The one account goals are held in. Created the first time money is put
+  /// aside rather than seeded — an empty "Goals" chip on a fresh ledger is an
+  /// answer to a question nobody asked.
+  bool forGoals;
 
   /// What was in the account the day tracking started. Signed: an account can
   /// legitimately open in the red (a credit card).
@@ -237,6 +252,7 @@ class Account {
     'color': color,
     'opening': openingBalanceMinor,
     if (archived) 'archived': true,
+    if (forGoals) 'forGoals': true,
   };
 
   factory Account.fromJson(Map<String, dynamic> j) => Account(
@@ -246,6 +262,7 @@ class Account {
     color: (j['color'] as num?)?.toInt() ?? defaultCatColor,
     openingBalanceMinor: (j['opening'] as num?)?.toInt() ?? 0,
     archived: j['archived'] as bool? ?? false,
+    forGoals: j['forGoals'] as bool? ?? false,
   );
 }
 
@@ -414,6 +431,50 @@ class Shortcut {
   );
 }
 
+/// Something being saved for: a name, a target, and nothing else.
+///
+/// The goal holds no money. Putting ₹2,000 aside moves ₹2,000 out of the
+/// account it came from and into the goals account, as an ordinary transfer in
+/// the ledger — so the account you spend from is genuinely lighter by what you
+/// have promised elsewhere, and the row is there to find, edit and delete like
+/// any other. What a goal has in it is summed from those rows
+/// ([PennyStore.statusOf]), never stored here: two places for one number is
+/// two places to disagree.
+class Goal {
+  Goal({
+    String? id,
+    required this.name,
+    required this.targetMinor,
+    this.icon = 'piggy-bank',
+    this.color = defaultCatColor,
+  }) : id = id ?? newId();
+
+  final String id;
+  String name;
+
+  /// What the thing costs. Always positive — the editor will not save a zero.
+  int targetMinor;
+
+  String icon;
+  int color;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'target': targetMinor,
+    'icon': icon,
+    'color': color,
+  };
+
+  factory Goal.fromJson(Map<String, dynamic> j) => Goal(
+    id: j['id'] as String?,
+    name: j['name'] as String? ?? 'Goal',
+    targetMinor: ((j['target'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
+    icon: j['icon'] as String? ?? 'piggy-bank',
+    color: (j['color'] as num?)?.toInt() ?? defaultCatColor,
+  );
+}
+
 // ── The store ───────────────────────────────────────────────────────────────
 
 /// The model, the store and the persistence layer, in one object.
@@ -427,6 +488,7 @@ class PennyStore extends ChangeNotifier {
   final List<Account> accounts = [];
   final List<Rule> rules = [];
   final List<Shortcut> shortcuts = [];
+  final List<Goal> goals = [];
 
   ThemeMode themeMode = ThemeMode.light;
 
@@ -438,8 +500,8 @@ class PennyStore extends ChangeNotifier {
   bool onboarded = false;
   bool loaded = false;
 
-  /// Celebrations already shown today, by key. Reopening the app must not
-  /// replay a moment the person already saw.
+  /// Celebrations already shown, by key, against the day they were shown on.
+  /// Reopening the app must not replay a moment the person already saw.
   final Map<String, String> _moments = {};
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -488,6 +550,7 @@ class PennyStore extends ChangeNotifier {
     List<Txn> txns,
     List<Rule> rules,
     List<Shortcut> shortcuts,
+    List<Goal> goals,
   })
   _decode(String raw) {
     final doc = jsonDecode(raw) as Map<String, dynamic>;
@@ -502,6 +565,7 @@ class PennyStore extends ChangeNotifier {
       txns: read('txns', Txn.fromJson),
       rules: read('rules', Rule.fromJson),
       shortcuts: read('shortcuts', Shortcut.fromJson),
+      goals: read('goals', Goal.fromJson),
     );
   }
 
@@ -512,6 +576,7 @@ class PennyStore extends ChangeNotifier {
       List<Txn> txns,
       List<Rule> rules,
       List<Shortcut> shortcuts,
+      List<Goal> goals,
     })
     doc,
   ) {
@@ -530,6 +595,9 @@ class PennyStore extends ChangeNotifier {
     shortcuts
       ..clear()
       ..addAll(doc.shortcuts);
+    goals
+      ..clear()
+      ..addAll(doc.goals);
     _repair();
     _renameUntouchedDefaults();
     _sort();
@@ -609,6 +677,13 @@ class PennyStore extends ChangeNotifier {
           !accountIds.contains(r.accountId) ||
           !categoryIds.contains(r.categoryId),
     );
+
+    // A transfer that named a goal which is no longer here stays in the ledger
+    // — it is a real movement of money — but stops claiming to belong to one.
+    final goalIds = {for (final g in goals) g.id};
+    for (final t in txns) {
+      if (t.goalId != null && !goalIds.contains(t.goalId)) t.goalId = null;
+    }
 
     // A shortcut is a convenience, not a record: one pointing at an account or
     // category that no longer exists is dropped rather than adopted, because
@@ -715,17 +790,25 @@ class PennyStore extends ChangeNotifier {
     await prefs.setInt(_themeKey, mode.index);
   }
 
-  /// True the first time [key] is claimed today. Persisted, so a relaunch does
-  /// not replay a celebration.
+  /// True the first time [key] is claimed, and never again. Persisted, so a
+  /// relaunch does not replay a celebration.
+  ///
+  /// Once ever, not once a day: the things worth a moment here are milestones
+  /// — half of a goal, all of it — and a milestone is only crossed once. The
+  /// day it happened is stored rather than a bare flag because it costs
+  /// nothing and answers "when was that?" from an export.
   bool claimMoment(String key) {
-    final now = dayKey(today());
-    if (_moments[key] == now) return false;
-    _moments[key] = now;
+    if (_moments.containsKey(key)) return false;
+    _moments[key] = dayKey(today());
     SharedPreferences.getInstance().then(
       (p) => p.setString(_momentsKey, jsonEncode(_moments)),
     );
     return true;
   }
+
+  /// [amount] as it should read on screen: the figure itself, or the mask when
+  /// amounts are hidden. One place, so no screen can forget one.
+  String show(String amount) => hideAmounts ? maskedAmount : amount;
 
   // ── Lookups ───────────────────────────────────────────────────────────────
 
@@ -860,6 +943,150 @@ class PennyStore extends ChangeNotifier {
     _commit();
   }
 
+  void addGoal(Goal g) {
+    goals.add(g);
+    _commit();
+  }
+
+  /// Removes [g]. The transfers it collected stay in the ledger and the money
+  /// stays in the goals account — deleting a goal is giving up on the plan,
+  /// not spending the money, and the app must not guess where it should go
+  /// back to.
+  void removeGoal(Goal g) {
+    goals.removeWhere((x) => x.id == g.id);
+    _repair();
+    _commit();
+  }
+
+  /// The account goals are held in, made on first use.
+  Account goalsAccount() {
+    final existing = goalsAccountOrNull;
+    if (existing != null) return existing;
+    final a = Account(
+      name: 'Goals',
+      icon: 'piggy-bank',
+      color: 4,
+      forGoals: true,
+    );
+    accounts.add(a);
+    _commit();
+    return a;
+  }
+
+  Account? get goalsAccountOrNull {
+    for (final a in accounts) {
+      if (a.forGoals) return a;
+    }
+    return null;
+  }
+
+  /// A transfer still carries a category — the field is not nullable, and a
+  /// dangling id would be adopted into an "Uncategorised" bucket by [_repair].
+  /// Every breakdown ignores it, exactly as it ignores the one the entry sheet
+  /// puts on a transfer typed by hand.
+  String _transferCategoryId() {
+    final expense = categoriesOf(TxKind.expense);
+    if (expense.isNotEmpty) return expense.first.id;
+    return categories.isEmpty ? '' : categories.first.id;
+  }
+
+  /// Put [minor] aside for [g], out of [fromAccountId].
+  ///
+  /// An ordinary transfer, dated today, tagged with the goal: the account it
+  /// came from is lighter by the amount, the goals account is heavier, and the
+  /// total balance does not move — the money is still yours, it is just
+  /// somewhere with a name on it.
+  Txn putAside(Goal g, int minor, String fromAccountId) {
+    final t = Txn(
+      kind: TxKind.transfer,
+      amountMinor: minor,
+      day: dayKey(today()),
+      categoryId: _transferCategoryId(),
+      accountId: fromAccountId,
+      toAccountId: goalsAccount().id,
+      note: g.name,
+      goalId: g.id,
+    );
+    addTxn(t);
+    return t;
+  }
+
+  /// Take [minor] back out of [g], into [toAccountId]. Capped at what the goal
+  /// actually holds: a goal cannot hand back money it never had.
+  Txn? takeOut(Goal g, int minor, String toAccountId) {
+    final capped = minor.clamp(0, statusOf(g).saved);
+    if (capped <= 0) return null;
+    final t = Txn(
+      kind: TxKind.transfer,
+      amountMinor: capped,
+      day: dayKey(today()),
+      categoryId: _transferCategoryId(),
+      accountId: goalsAccount().id,
+      toAccountId: toAccountId,
+      note: g.name,
+      goalId: g.id,
+    );
+    addTxn(t);
+    return t;
+  }
+
+  /// What [g] has in it, and how far along that is.
+  ///
+  /// Summed from the ledger rather than read off the goal, so the rows are the
+  /// only record: delete a contribution in the ledger and the goal is smaller,
+  /// with nothing to reconcile.
+  ///
+  /// ponytail: one pass over the ledger per goal, like [balanceOf]. Cache per
+  /// (goal, txns.length) if a very long ledger ever makes the page stutter.
+  ({int saved, int remaining, double progress, bool reached}) statusOf(Goal g) {
+    final vault = goalsAccountOrNull?.id;
+    var saved = 0;
+    if (vault != null) {
+      for (final t in txns) {
+        if (t.goalId != g.id || t.kind != TxKind.transfer) continue;
+        if (t.toAccountId == vault) {
+          saved += t.amountMinor;
+        } else if (t.accountId == vault) {
+          saved -= t.amountMinor;
+        }
+      }
+    }
+    if (saved < 0) saved = 0;
+    final remaining = g.targetMinor - saved;
+    return (
+      saved: saved,
+      remaining: remaining > 0 ? remaining : 0,
+      // A target of zero is a hand-edited file, not a goal already done.
+      progress: g.targetMinor <= 0
+          ? 0.0
+          : (saved / g.targetMinor).clamp(0.0, 1.0),
+      reached: g.targetMinor > 0 && saved >= g.targetMinor,
+    );
+  }
+
+  /// Everything sitting in the goals account. The overview subtracts it from
+  /// the balance to say what is actually free to spend.
+  int get totalSetAside {
+    final vault = goalsAccountOrNull;
+    return vault == null ? 0 : balanceOf(vault.id);
+  }
+
+  /// The milestone worth celebrating for [g] right now, or null.
+  ///
+  /// Every milestone at or below where the goal stands is claimed, and only
+  /// the highest newly claimed one is returned — so a goal that goes from
+  /// nothing to full in one contribution celebrates once rather than four
+  /// times, and taking money back out and putting it in again does not replay
+  /// a moment that has already been seen.
+  int? claimMilestone(Goal g) {
+    final progress = statusOf(g).progress;
+    int? top;
+    for (final m in const [25, 50, 75, 100]) {
+      if (progress * 100 >= m && claimMoment('goal-${g.id}-$m')) top = m;
+    }
+    return top;
+  }
+
   /// Save after a caller has mutated a model object in place — the edit sheet
   /// writes straight onto the row it was handed. Re-sorts because an edit can
   /// change a transaction's day.
@@ -891,6 +1118,7 @@ class PennyStore extends ChangeNotifier {
     'txns': [for (final t in txns) t.toJson()],
     'rules': [for (final r in rules) r.toJson()],
     'shortcuts': [for (final s in shortcuts) s.toJson()],
+    'goals': [for (final g in goals) g.toJson()],
   });
 
   /// Replace everything with [raw]. Returns false and changes nothing if the

@@ -52,6 +52,7 @@ void main() {
     // tooltip for anyone else either.
     for (final tooltip in [
       'Settings',
+      'Insights',
       'Add a transaction',
       'Previous month',
       'Next month',

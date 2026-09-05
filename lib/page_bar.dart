@@ -5,19 +5,25 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'theme.dart';
 
 /// The shell's top bar: a title, an optional line under it, and up to two
-/// round icon buttons. It carries no navigation of its own — the tabs below do
-/// that — so there is never a back arrow here.
+/// round icon buttons.
+///
+/// A tab page passes no [onBack] — the tabs below are its navigation, and a
+/// back arrow on a page you cannot go back from is a lie. A page that was
+/// *pushed*, like Insights, passes one, and gets the same bar rather than a
+/// stock `AppBar` that reads as a different app.
 class PageBar extends StatelessWidget {
   const PageBar({
     super.key,
     required this.title,
     this.subtitle,
     this.actions = const [],
+    this.onBack,
   });
 
   final String title;
   final String? subtitle;
   final List<Widget> actions;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +34,15 @@ class PageBar extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (onBack != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: RoundIconButton(
+                icon: LucideIcons.arrowLeft,
+                tooltip: 'Back',
+                onPressed: onBack!,
+              ),
+            ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,8 +82,19 @@ const tabBarGap = 16.0;
 const shellTabs = <TabSpec>[
   (label: 'Overview', icon: LucideIcons.house),
   (label: 'Ledger', icon: LucideIcons.receiptText),
-  (label: 'Insights', icon: LucideIcons.chartPie),
+  (label: 'Goals', icon: LucideIcons.piggyBank),
 ];
+
+/// The slot the add button occupies at the bottom right, and the gap it keeps
+/// from the pill.
+///
+/// The pill centres itself in what is *left* of the width rather than in the
+/// whole of it: centred on the screen, a three-tab pill with its selected tab
+/// open runs to about 232 and the button starts at 284, so the two would
+/// overlap on a narrow phone. Wick floats the same pair and the same numbers
+/// have to agree there.
+const dockButton = 54.0;
+const dockGap = 14.0;
 
 /// The floating tab pill.
 ///
@@ -94,7 +120,10 @@ class PageTabs extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.only(bottom: tabBarGap),
+          padding: const EdgeInsets.only(
+            bottom: tabBarGap,
+            right: dockButton + dockGap * 2,
+          ),
           child: Container(
             decoration: BoxDecoration(
               color: isDark(context) ? darkCard : Colors.white,
@@ -253,4 +282,57 @@ void showUndoBar(
         action: SnackBarAction(label: 'UNDO', onPressed: onUndo),
       ),
     );
+}
+
+/// The add button, floating at the bottom right beside the tab pill.
+///
+/// A `FloatingActionButton` rather than another `RoundIconButton`: it is the
+/// one control that floats over a scrolling page, and the platform widget
+/// already brings the elevation, the tooltip, the semantics and the shuffle
+/// out of a snackbar's way. Sized to the pill it sits beside — a 56 default
+/// next to a 54 bar reads as a mistake at a glance.
+class AddButton extends StatelessWidget {
+  const AddButton({super.key, required this.tooltip, required this.onPressed});
+
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          sizeConstraints: BoxConstraints.tightFor(
+            width: dockButton,
+            height: dockButton,
+          ),
+        ),
+      ),
+      // The pill's own soft shadow rather than Material's: the theme sets no
+      // shadow colour, so an elevated FAB draws a hard black ring next to a
+      // pill that floats on a wash of navy at 6%.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: cardShadow(isDark(context)),
+        ),
+        child: FloatingActionButton(
+          onPressed: onPressed,
+          tooltip: tooltip,
+          backgroundColor: sproutOf(context),
+          // Computed, not white: white on the sprout measures 2.57:1.
+          foregroundColor: onAccent(context),
+          elevation: 0,
+          focusElevation: 0,
+          hoverElevation: 0,
+          highlightElevation: 0,
+          shape: const CircleBorder(),
+          // The label rides on the icon: a FAB's tooltip is a tooltip, not a
+          // semantics label, so a screen reader would otherwise announce an
+          // unnamed button.
+          child: Icon(LucideIcons.plus, size: 22, semanticLabel: tooltip),
+        ),
+      ),
+    );
+  }
 }

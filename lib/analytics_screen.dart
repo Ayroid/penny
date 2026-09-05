@@ -9,8 +9,16 @@ import 'page_bar.dart';
 import 'store.dart';
 import 'theme.dart';
 
+void openInsights(BuildContext context, PennyStore store) => Navigator.of(
+  context,
+).push(MaterialPageRoute(builder: (_) => InsightsPage(store: store)));
+
 /// Where the money went: a trend over recent periods, and the breakdown that
 /// explains the biggest bar.
+///
+/// Opened from the overview rather than swiped to. It is the screen you go to
+/// with a question, not one you pass through on the way to the ledger — and a
+/// tab pill with four things in it had no room left for the add button.
 class InsightsPage extends StatefulWidget {
   const InsightsPage({super.key, required this.store});
 
@@ -48,7 +56,11 @@ class _InsightsPageState extends State<InsightsPage> {
         bottom: false,
         child: Column(
           children: [
-            const PageBar(title: 'Insights', subtitle: 'Where it goes'),
+            PageBar(
+              title: 'Insights',
+              subtitle: 'Where it goes',
+              onBack: () => Navigator.of(context).maybePop(),
+            ),
             Expanded(
               child: store.txns.isEmpty
                   ? const PennyMessage(
@@ -59,7 +71,8 @@ class _InsightsPageState extends State<InsightsPage> {
                       size: 120,
                     )
                   : ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+                      // No tab pill under a pushed page to clear.
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                       children: [
                         Segmented<Period>(
                           options: {for (final p in Period.values) p: p.label},
@@ -67,10 +80,14 @@ class _InsightsPageState extends State<InsightsPage> {
                           onChanged: (p) => setState(() => _period = p),
                         ),
                         const SizedBox(height: 12),
-                        _TrendCard(buckets: buckets),
+                        _TrendCard(store: store, buckets: buckets),
                         if (change != null) ...[
                           const SizedBox(height: 12),
-                          _ChangeCard(change: change, period: _period),
+                          _ChangeCard(
+                            store: store,
+                            change: change,
+                            period: _period,
+                          ),
                         ],
                         const SizedBox(height: 12),
                         Padding(
@@ -104,8 +121,9 @@ class _InsightsPageState extends State<InsightsPage> {
 
 /// In and out, one pair of bars per period.
 class _TrendCard extends StatelessWidget {
-  const _TrendCard({required this.buckets});
+  const _TrendCard({required this.store, required this.buckets});
 
+  final PennyStore store;
   final List<Bucket> buckets;
 
   @override
@@ -144,8 +162,10 @@ class _TrendCard extends StatelessWidget {
                 for (final b in buckets)
                   Expanded(
                     child: Semantics(
-                      label:
-                          '${b.label}: credit ${rupees(b.income)}, debit ${rupees(b.expense)}',
+                      label: store.hideAmounts
+                          ? '${b.label}: hidden'
+                          : '${b.label}: credit ${rupees(b.income)}, '
+                                'debit ${rupees(b.expense)}',
                       excludeSemantics: true,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -181,7 +201,7 @@ class _TrendCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Biggest bar ${rupeesWhole(peak)}',
+            'Biggest bar ${store.show(rupeesWhole(peak))}',
             style: mono(11, color: scheme.secondary),
           ),
         ],
@@ -243,8 +263,13 @@ class _Key extends StatelessWidget {
 
 /// "₹1,800 more than last month." One line of maths, disproportionate insight.
 class _ChangeCard extends StatelessWidget {
-  const _ChangeCard({required this.change, required this.period});
+  const _ChangeCard({
+    required this.store,
+    required this.change,
+    required this.period,
+  });
 
+  final PennyStore store;
   final int change;
   final Period period;
 
@@ -260,10 +285,13 @@ class _ChangeCard extends StatelessWidget {
     final (icon, phrase) = change == 0
         ? (LucideIcons.equal, 'Spending is level with $previous')
         : change > 0
-        ? (LucideIcons.trendingUp, '${rupeesWhole(change)} more than $previous')
+        ? (
+            LucideIcons.trendingUp,
+            '${store.show(rupeesWhole(change))} more than $previous',
+          )
         : (
             LucideIcons.trendingDown,
-            '${rupeesWhole(-change)} less than $previous',
+            '${store.show(rupeesWhole(-change))} less than $previous',
           );
 
     return TintCard(
@@ -309,8 +337,10 @@ class _Breakdown extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Semantics(
-                    label:
-                        '${c?.name ?? 'Uncategorised'}, ${rupees(e.value)}, $share percent',
+                    label: store.hideAmounts
+                        ? '${c?.name ?? 'Uncategorised'}, $share percent'
+                        : '${c?.name ?? 'Uncategorised'}, ${rupees(e.value)}, '
+                              '$share percent',
                     excludeSemantics: true,
                     child: Column(
                       children: [
@@ -336,7 +366,7 @@ class _Breakdown extends StatelessWidget {
                             ),
                             const SizedBox(width: 10),
                             Text(
-                              rupees(e.value),
+                              store.show(rupees(e.value)),
                               style: mono(
                                 13,
                                 color: scheme.onSurface,

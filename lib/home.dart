@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'analytics.dart';
+import 'analytics_screen.dart';
 import 'entry_sheet.dart';
 import 'icons.dart';
 import 'money.dart';
@@ -84,13 +85,16 @@ class _HomePageState extends State<HomePage> {
         TxnRow(
           store: store,
           txn: t,
-          hideAmount: store.hideAmounts,
           onTap: () => showEntrySheet(context, store, existing: t),
         ),
       );
     }
 
     return Scaffold(
+      floatingActionButton: AddButton(
+        tooltip: 'Add a transaction',
+        onPressed: () => showEntrySheet(context, store),
+      ),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -102,16 +106,18 @@ class _HomePageState extends State<HomePage> {
               // clock and the goldens stay still.
               subtitle: longDate(today()),
               actions: [
+                // Insights is a page you go to, not a tab you land on by
+                // swiping past it — so it sits here, next to the other thing
+                // you open on purpose.
+                RoundIconButton(
+                  icon: LucideIcons.chartPie,
+                  tooltip: 'Insights',
+                  onPressed: () => openInsights(context, store),
+                ),
                 RoundIconButton(
                   icon: LucideIcons.settings,
                   tooltip: 'Settings',
                   onPressed: widget.onSettings,
-                ),
-                RoundIconButton(
-                  icon: LucideIcons.plus,
-                  tooltip: 'Add a transaction',
-                  filled: true,
-                  onPressed: () => showEntrySheet(context, store),
                 ),
               ],
             ),
@@ -269,6 +275,17 @@ class _BalanceCard extends StatelessWidget {
               spacing: -0.5,
             ),
           ),
+          // What the goals have spoken for, and what is left after them. The
+          // whole point of a goal is knowing the second number — money set
+          // aside is still in the balance above, and without this line the
+          // balance quietly overstates what there is to spend.
+          if (store.totalSetAside > 0)
+            Text(
+              '${store.show(rupeesWhole(store.totalSetAside))} set aside · '
+              '${store.show(rupeesWhole(total - store.totalSetAside))} free',
+              strutStyle: monoStrut(11.5),
+              style: mono(11.5, color: scheme.secondary),
+            ),
           if (store.liveAccounts.length > 1) ...[
             const SizedBox(height: 12),
             Wrap(
