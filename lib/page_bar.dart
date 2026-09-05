@@ -76,44 +76,50 @@ class PageTabs extends StatelessWidget {
 
     return Align(
       alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isDark(context) ? darkCard : Colors.white,
-            borderRadius: BorderRadius.circular(pill),
-            boxShadow: cardShadow(isDark(context)),
-          ),
-          clipBehavior: Clip.antiAlias,
-          // The shell is a bare Stack — the pages inside it bring their own
-          // Scaffolds, but this pill floats above them with no Material of its
-          // own, and every tab is an InkWell. Without this the tabs assert on
-          // first build and the pill lays out at a nonsense width.
-          child: Material(
-            color: Colors.transparent,
-            child: Padding(
-              padding: const EdgeInsets.all(5),
-              child: ValueListenableBuilder<double>(
-                valueListenable: position,
-                builder: (context, value, _) => Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < shellTabs.length; i++)
-                      _Tab(
-                        spec: shellTabs[i],
-                        // How selected this tab is, 0 to 1. Mid-swipe both
-                        // neighbours are partly lit, which is what makes the pill
-                        // track the finger.
-                        // `clamp` does not tame a NaN — it returns one — and a
-                        // NaN weight becomes a NaN width. The listenable is
-                        // supplied by the caller, so this does not trust it.
-                        weight: value.isNaN
-                            ? (i == 0 ? 1.0 : 0.0)
-                            : (1 - (value - i).abs()).clamp(0.0, 1.0),
-                        onTap: () => onSelect(i),
-                        scheme: scheme,
-                      ),
-                  ],
+      // Above the gesture bar, not under it. The shell is a bare Stack over the
+      // whole screen, so without this the pill sits in the strip the system
+      // reserves for its own back-swipe.
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark(context) ? darkCard : Colors.white,
+              borderRadius: BorderRadius.circular(pill),
+              boxShadow: cardShadow(isDark(context)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            // The shell is a bare Stack — the pages inside it bring their own
+            // Scaffolds, but this pill floats above them with no Material of its
+            // own, and every tab is an InkWell. Without this the tabs assert on
+            // first build and the pill lays out at a nonsense width.
+            child: Material(
+              color: Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.all(5),
+                child: ValueListenableBuilder<double>(
+                  valueListenable: position,
+                  builder: (context, value, _) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < shellTabs.length; i++)
+                        _Tab(
+                          spec: shellTabs[i],
+                          // How selected this tab is, 0 to 1. Mid-swipe both
+                          // neighbours are partly lit, which is what makes the pill
+                          // track the finger.
+                          // `clamp` does not tame a NaN — it returns one — and a
+                          // NaN weight becomes a NaN width. The listenable is
+                          // supplied by the caller, so this does not trust it.
+                          weight: value.isNaN
+                              ? (i == 0 ? 1.0 : 0.0)
+                              : (1 - (value - i).abs()).clamp(0.0, 1.0),
+                          onTap: () => onSelect(i),
+                          scheme: scheme,
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
