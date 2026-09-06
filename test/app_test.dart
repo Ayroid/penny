@@ -1130,12 +1130,12 @@ void main() {
       await tester.pumpWidget(wrap(SettingsScreen(store: store)));
       await tester.pumpAndSettle();
       await tester.dragUntilVisible(
-        find.text('Show the intro again'),
+        find.text('Onboarding'),
         find.byType(Scrollable).first,
         const Offset(0, -200),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Show the intro again'));
+      await tester.tap(find.text('Onboarding'));
       await tester.pumpAndSettle();
 
       expect(find.text("I'm Penny"), findsOneWidget);

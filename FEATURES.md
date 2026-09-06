@@ -8,13 +8,13 @@ when it ships. Keep entries one line; the reasoning lives in the code comments.
 kill. That was *before* Goals and the bottom dock, and before the deep-green
 chrome and the rebuilt Insights; all four are covered by tests and goldens and
 have not been on hardware yet
-**Last release:** 0.2.0, in `releases/0.2.0/` — the first build anyone can be
-handed. 0.1.0 was signed with the debug key, so nothing can update it; 0.2.0 is
-cut from `android/penny-release.jks` and `apksigner` reports `CN=Penny`. Nothing
-is published anywhere — a release here means three APKs on this disk
-**Current build:** arm64 **19.5 MB**, armeabi-v7a 16.7 MB, x86_64 21.0 MB
+**Last release:** 0.3.0, in `releases/0.3.0/` and — for the first time —
+published, at `github.com/Ayroid/penny/releases/tag/v0.3.0`, three APKs on the
+tag. 0.1.0 was signed with the debug key, so nothing can update it; everything
+since is cut from `android/penny-release.jks` and `apksigner` reports `CN=Penny`
+**Current build:** arm64 **20.9 MB**, armeabi-v7a 18.2 MB, x86_64 22.4 MB
 (`--split-per-abi --obfuscate --split-debug-info`, the flags `tool/release.sh`
-uses). Measured at 0.2.0; `assets/` is ~170 KB lighter since
+uses). Measured at 0.3.0
 
 **On build size:** ship `--split-per-abi` or the `.aab`, never the plain APK.
 A fat `app-release.apk` carries all three ABIs and roughly doubles what anyone
@@ -554,7 +554,7 @@ downloads.
 - [x] Export a backup (JSON, shared as a file)
 - [x] Import a backup — confirmed first, decoded as UTF-8, dialog on failure
 - [x] Export a spreadsheet — CSV, oldest first, quoted, plain decimal amounts
-- [x] Show the intro again — the same three screens, and the seed behind them
+- [x] Onboarding — replay the same three screens, and the seed behind them
       stays the no-op it already was
 
 ### Release

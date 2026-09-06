@@ -158,8 +158,8 @@ class _Body extends StatelessWidget {
           padding: EdgeInsets.zero,
           child: _Row(
             icon: LucideIcons.sparkles,
-            label: 'Show the intro again',
-            subtitle: 'The three screens from first launch',
+            label: 'Onboarding',
+            subtitle: 'Review the onboarding flow',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => OnboardingScreen(store: store)),
             ),
