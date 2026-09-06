@@ -331,10 +331,7 @@ void main() {
     // Both sides are reported, and in the same shape.
     expect(find.text('Spending'), findsOneWidget);
     expect(find.text('Earning'), findsOneWidget);
-    expect(
-      find.text('₹1,000 more than last month · up 100%'),
-      findsOneWidget,
-    );
+    expect(find.text('₹1,000 more than last month · up 100%'), findsOneWidget);
 
     // Forward is the future and stays put; back is a month that has its own
     // figures, not the ones above.
@@ -1287,6 +1284,101 @@ void main() {
 
       expect(find.text('COLOUR'), findsOneWidget);
       expect(find.text('ICON'), findsOneWidget);
+    });
+  });
+
+  group('holding a row', () {
+    testWidgets('copies it to today, and offers it back', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: 45000,
+          day: dayKey(shiftDays(today(), -9)),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+          note: 'Chai',
+        ),
+      );
+      await tester.pumpWidget(wrap(LedgerPage(store: store)));
+      await tester.pumpAndSettle();
+
+      // The row draws the account and the note as one line.
+      await tester.longPress(find.textContaining('Chai'));
+      await tester.pumpAndSettle();
+
+      // The sheet asks first, carrying what it is about to copy.
+      expect(find.text('Copy to today'), findsOneWidget);
+      expect(find.text('-₹450.00'), findsWidgets);
+      expect(
+        store.txns,
+        hasLength(1),
+        reason: 'a hold on a scrolling list must not write a row by itself',
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Copy'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns, hasLength(2));
+      final copy = store.txns.first;
+      expect(copy.day, dayKey(today()), reason: 'dated today, not then');
+      expect(copy.amountMinor, 45000);
+      expect(copy.note, 'Chai');
+      expect(find.text('Copied to today'), findsOneWidget);
+
+      await tester.tap(find.text('UNDO'));
+      await tester.pumpAndSettle();
+      expect(store.txns, hasLength(1));
+    });
+
+    testWidgets('a copy is not a rule\'s row, and not a goal\'s', (
+      tester,
+    ) async {
+      phone(tester);
+      final store = await emptyStore();
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: 45000,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+          note: 'Rent',
+          ruleId: 'r1',
+        ),
+      );
+      await tester.pumpWidget(wrap(LedgerPage(store: store)));
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.textContaining('Rent'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Copy'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns.first.ruleId, isNull, reason: 'it was entered by hand');
+    });
+
+    testWidgets('a goal row is sent back to the goal instead', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      final goal = Goal(name: 'Phone', targetMinor: 100000);
+      store.addGoal(goal);
+      store.accounts.first.openingBalanceMinor = 500000;
+      store.putAside(goal, 20000, store.accounts.first.id);
+      await tester.pumpWidget(wrap(LedgerPage(store: store)));
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.text('Phone'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns, hasLength(1), reason: 'nothing was copied');
+      expect(
+        find.text('Copy to today'),
+        findsNothing,
+        reason: 'no sheet: there is nothing to confirm',
+      );
+      expect(find.textContaining('from the goal'), findsOneWidget);
     });
   });
 

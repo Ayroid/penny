@@ -405,7 +405,7 @@ const undoLinger = Duration(seconds: 4);
 void showUndoBar(
   BuildContext context,
   String message, {
-  required VoidCallback onUndo,
+  VoidCallback? onUndo,
 }) {
   ScaffoldMessenger.of(context)
     // One at a time. Tapping a pinned chip twice should leave one offer to
@@ -424,7 +424,11 @@ void showUndoBar(
         // Eight above whatever the `Scaffold` cleared, which is the button
         // and so the pill beside it.
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        action: SnackBarAction(label: 'UNDO', onPressed: onUndo),
+        // No action when there is nothing to take back — the same bar, in
+        // the same place, carrying a sentence instead of an offer.
+        action: onUndo == null
+            ? null
+            : SnackBarAction(label: 'UNDO', onPressed: onUndo),
       ),
     );
 }

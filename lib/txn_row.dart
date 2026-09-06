@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'icons.dart';
 import 'money.dart';
+import 'page_bar.dart';
+import 'sheets.dart';
 import 'store.dart';
 import 'theme.dart';
 
@@ -25,6 +28,98 @@ class TxnRow extends StatelessWidget {
 
   /// Running balance after this row, for the ledger. Absent on the overview.
   final int? showBalance;
+
+  /// Hold a row to enter it again, dated today.
+  ///
+  /// Built into the row rather than passed in, because it should be the same
+  /// gesture in the ledger, on the overview and in the sheet Insights opens —
+  /// three call sites is three chances to leave one of them out.
+  ///
+  /// A hold is easy to do by accident on a list that scrolls, so it opens a
+  /// sheet and asks rather than writing a row behind the thumb. The sheet
+  /// carries what it is about to copy — the same three strings the row itself
+  /// is drawn from, so the two cannot describe it differently.
+  ///
+  /// The copy carries neither [Txn.ruleId] nor [Txn.goalId]: it was not
+  /// materialised from a rule, and it is not money a goal counted.
+  void _copy(
+    BuildContext context,
+    String title,
+    String subtitle,
+    String amount,
+  ) => _duplicate(context, title: title, subtitle: subtitle, amount: amount);
+
+  Future<void> _duplicate(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required String amount,
+  }) async {
+    // A goal's own rows are the exception, and there is nothing to confirm:
+    // copying one would move money into the goals account without the goal
+    // knowing, past the two ceilings `putAside` applies — the hand-made
+    // transfer the pickers stopped offering. The goals page is where money is
+    // put aside.
+    if (txn.goalId != null) {
+      showUndoBar(context, 'Put this aside from the goal instead');
+      return;
+    }
+
+    final go = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => SheetFrame(
+        title: 'Copy to today',
+        pinned: FilledButton(
+          onPressed: () => Navigator.pop(sheet, true),
+          child: const Text('Copy'),
+        ),
+        children: [
+          Text(
+            amount,
+            strutStyle: monoStrut(24),
+            style: mono(
+              24,
+              color: Theme.of(sheet).colorScheme.onSurface,
+              weight: FontWeight.w800,
+              spacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            [title, if (subtitle.isNotEmpty) subtitle].join(' · '),
+            style: Theme.of(sheet).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Enters this again, dated today. The row it came from is left '
+            'alone.',
+            style: Theme.of(sheet).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+    if (go != true || !context.mounted) return;
+
+    final copy = Txn(
+      kind: txn.kind,
+      amountMinor: txn.amountMinor,
+      day: dayKey(today()),
+      categoryId: txn.categoryId,
+      accountId: txn.accountId,
+      toAccountId: txn.toAccountId,
+      note: txn.note,
+    );
+    store.addTxn(copy);
+    HapticFeedback.mediumImpact();
+    if (context.mounted) {
+      showUndoBar(
+        context,
+        'Copied to today',
+        onUndo: () => store.removeTxn(copy),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,8 +159,10 @@ class TxnRow extends StatelessWidget {
       label: '$title, $amount${subtitle.isEmpty ? '' : ', $subtitle'}',
       excludeSemantics: true,
       onTap: onTap,
+      onLongPress: () => _copy(context, title, subtitle, amount),
       child: InkWell(
         onTap: onTap,
+        onLongPress: () => _copy(context, title, subtitle, amount),
         borderRadius: BorderRadius.circular(radius),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
