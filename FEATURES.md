@@ -3,7 +3,7 @@
 Working checklist for what's built, what's broken, and what's next. Tick a box
 when it ships. Keep entries one line; the reasoning lives in the code comments.
 
-**Status:** 20 source files · 11,554 lines · 275 tests · 14 goldens · 4 runtime deps
+**Status:** 20 source files · 12,069 lines · 292 tests · 14 goldens · 4 runtime deps
 **Verified on:** Android device — runs, rupee and mono render, data survives a cold
 kill. That was *before* Goals and the bottom dock, and before the deep-green
 chrome and the rebuilt Insights; all four are covered by tests and goldens and
@@ -152,6 +152,18 @@ downloads.
   measures the bar against the pill rather than trusting a golden, which the
   pill paints over.
 
+- **A contribution says when, like every other row.** It was always dated
+  today, on the grounds that money set aside is set aside now — which is true
+  right up until someone catches up a month of saving in one sitting and gets
+  four rows all stamped with the day they remembered. The goal itself never
+  cared: `statusOf` counts by tag, not by date. The ledger did, because the
+  ledger is the record of *when*. So the sheet carries the same day pill the
+  entry sheet does, and `dayLabel` and `pickDay` moved into `sheets.dart` so
+  the two cannot disagree about what to call a day or how far back to allow.
+  The ceiling is still measured against what the account holds *now* — the one
+  balance this app computes — because backdating a row does not backdate the
+  money.
+
 - **Putting money aside moves it, and the ledger records that.** Goals shipped
   first as an earmark — a `savedMinor` on the goal, no transaction — on the
   grounds that a jar in the real world is not a ledger entry. That was wrong in
@@ -161,6 +173,17 @@ downloads.
   `Txn.goalId`. The source account is genuinely lighter, the total balance does
   not move (a transfer nets to zero), and the row is in the ledger to find,
   edit and delete like any other.
+
+- **The page says when its own figures disagree.** Two sums come off the same
+  rows: what the goals claim, and what the goals account holds. They can only
+  come apart in one direction — money leaving that account without the goal
+  counting it, which nothing in the app offers any more but an imported backup
+  can still carry in, because dropping a row on import loses money. `statusOf`
+  floors each goal at zero so the page keeps drawing, and `goalsShortfall` is
+  what says the drawing is wrong: a line above the goals naming the gap, in the
+  coin's wash rather than in red, with no button on it — the app cannot know
+  which of the two figures is the one to keep. A balance *larger* than the
+  claims is not reported: deleting a goal leaves its money behind on purpose.
 
 - **A goal holds no number of its own.** What is in it is summed from those
   transfers by `statusOf` — into the goals account counts up, out of it counts
@@ -205,9 +228,71 @@ downloads.
   The amount field echoes nothing back under itself either — the figure is
   already in the field, with the ₹ in front of it.
 
-- **Nothing scolds.** Red is for destructive confirmation only, never for
-  spending. A month that ended down is ordinary. There is no disappointed
-  mascot pose, deliberately.
+- **Nothing scolds.** Red is for destructive confirmation, never for spending:
+  a month that ended down is ordinary, and there is no disappointed mascot
+  pose, deliberately. The calendar was briefly the exception — green up, red
+  down, colour standing in for the sign — and it is not any more: a day's
+  figure is written in whichever neutral ink survives the cell it sits on, and
+  a minus sign carries the direction. Red-versus-green is the classic
+  confusion pair, and a sign is not a hue.
+
+- **Holding a row *offers* to copy it to today; the Copy button does it.** A
+  hold is easy to do by accident on a list that scrolls, so the gesture opens a
+  sheet carrying the amount, what it was and where it came from — the same
+  three strings the row itself is drawn from, so the two cannot describe it
+  differently — and nothing is written until Copy is pressed. The undo bar
+  stays behind it: the sheet catches the accidental hold, the undo catches the
+  deliberate press on the wrong row.
+
+- **The copy is yesterday's chai, dated today.** The cheapest entry shortcut
+  left, and it is built into `TxnRow` rather than passed in at each call site,
+  because it has to be the same gesture in the ledger, on the overview and in
+  the sheet Insights opens — three call sites is three chances to leave one
+  out. The copy carries
+  neither `ruleId` nor `goalId`: it was not materialised from a rule, and it is
+  not money a goal counted. A goal's own row refuses and says where to go
+  instead — copying one would move money into the goals account past the two
+  ceilings `putAside` applies, which is the hand-made transfer the pickers
+  stopped offering.
+
+- **CSV is an export, not a backup.** JSON is the backup and the only thing
+  `importJson` reads; the spreadsheet goes out and does not come back. So it is
+  written for the reader on the other end: oldest first, names instead of ids,
+  every cell quoted with its own quotes doubled, and amounts as plain decimal
+  rupees — `₹1,20,450.00` is a *string* in every spreadsheet there is. The sign
+  is the kind's, so a column of amounts totals to something meaningful, and a
+  transfer is `0.00` there with its own figure in a column of its own: it moved
+  money without spending or earning it.
+
+- **The calendar is one grid, and the figures land inside it.** Shading
+  answers "how much" and never "which way", which is the question a day with a
+  salary in it is actually asking; the button writes each day's net into the
+  cells that are already there rather than swapping the grid for a second one.
+  It used to be two readings on a switch — the same seven columns over the same
+  days, drawn twice — which made a tap look like a change of subject and gave
+  the leading blanks a second place to be wrong. Shading alone stays the
+  default: it is the picture you can read without reading.
+
+  The ink is measured per cell, because the ramp runs from a pale wash to a
+  solid green and no one ink survives both ends — and measured against what the
+  cell is *painted*, card and page resolved underneath, since every tone on the
+  ramp is the accent at an alpha and a translucent green otherwise measures as
+  the full-strength one it was mixed from. Black and white rather than the
+  brand's navy: navy loses the middle of the ramp at 3.8:1, and a figure in a
+  cell is the reading rather than furniture. That is also why the direction is
+  a minus sign — an ink chosen for contrast cannot also mean a direction — and
+  the sign survives hiding as a bare `-••`, because a direction is not an
+  amount. The semantics label carries the figure signed whatever is on screen.
+
+- **Today is ringed; tapping a day holds it.** The ring is the cell's own ink,
+  so it survives both ends of the ramp, and every other cell carries a
+  transparent one so the grid does not shift by a pixel as it moves. Tapping a
+  day puts that day's rows below the calendar in place of the period's last
+  few — all of them, since a day is a short list by nature — and tapping the
+  same cell again lets it go, which has to be the way back because the ring is
+  the only thing saying a day is held. Moving the period or the arrows drops
+  the held day: a day picked in March has nothing to say about April, and rows
+  from outside the period on screen are worse than losing a selection.
 
 - **Insights reads a window, and the window is the page's state.** It opened
   on today and could only look at today, which made it a summary rather than a
@@ -312,12 +397,16 @@ downloads.
   thing, and `Goal.color` is gone from the model; an older file's `color` is
   simply read past.
 
-- **The soft green wash swaps its ink between themes.** A goal's percentage
-  pill and the line under a finished goal's bar are the deep tone on cream
-  (8.2:1) and the lit sprout at night — where the deep tone measures 2.6:1
-  against the dark wash and would fail an 11px label. `onSproutSoft` is the one
-  place that swap is made, the same inversion `onTint` makes for a category's
-  own wash, and `palette_test.dart` asserts both sides of it.
+- **The green that carries a figure is not the accent.** `sproutInk` is the
+  deep tone on cream and the lit sprout at night, and it is what a goal's
+  percentage pill and the line under a finished goal's bar are drawn in. The
+  accent itself measures 2.2:1 on the sunk fill and 2.6:1 on its own soft wash
+  — either would fail a small bold label — while the deep tone clears 7.9 and
+  8.2, and at night the pair inverts. The calendar takes neither: its figures
+  sit on the heatmap's own green, so `palette_test.dart` walks the ramp in both
+  themes and asserts the neutral pair clears 4.5 at every step — and that navy
+  does not, so the one place the brand ink is swapped out stays a decision
+  rather than an oversight.
 
 - **A goal is active, paused or archived — one field, three states.** Pausing
   stops money going in and says so on the card; archiving takes it off the page
@@ -401,6 +490,9 @@ downloads.
 - [x] Period arrows, forward disabled at the present
 - [x] Credit / debit / net meter on one line
 - [x] Spend grid — a calendar for the month, one row for the week
+- [x] The same calendar with each day's net written into it — a minus sign for
+      a debit, ink measured against the shade under it
+- [x] Today ringed in the grid; tapping a day puts its rows below the calendar
 - [x] Recent rows grouped under day headers
 - [x] Empty state leads with the action, not with three zero cards
 
@@ -409,6 +501,7 @@ downloads.
 - [x] Putting money aside is a real transfer, out of the account you pick
 - [x] A Goals account, made on first use, holding what has been put aside
 - [x] Taking it back out picks a destination, and is capped at what is in there
+- [x] Both carry a date, so a month of saving can be caught up in one sitting
 - [x] Progress summed from the ledger, so deleting a row shrinks the goal
 - [x] Milestones at 25/50/75/100% — `showPennyMoment`, claimed once ever
 - [x] "Bought it" spends out of Goals, prefilled — and closes the goal only
@@ -419,6 +512,8 @@ downloads.
 - [x] Archived goals behind a row under the add button, restored from the editor
 - [x] Set aside and free, under the balance on the overview
 - [x] Nothing else can spend the Goals account — it is off every picker
+- [x] And when a backup says otherwise, the page names the gap instead of
+      quietly drawing a figure it knows is wrong
 - [x] Goals ride the backup like everything else
 
 ### Ledger
@@ -443,6 +538,8 @@ downloads.
 - [x] Platform numeric keyboard, autofocused, decimal input formatter
 - [x] Spent / Earned / Moved, with the destination account for transfers
 - [x] Category, account, date pills; native date picker
+- [x] Hold any row, anywhere, to enter it again dated today — a sheet asks
+      first, and the copy is undoable for four seconds after it
 - [x] Save-for-quick-add toggle, reflecting what is already saved
 - [x] Delete matches Save's shape and asks first, with the amount in the question
 - [x] And then offers UNDO for four seconds, back at the row's own place
@@ -456,6 +553,7 @@ downloads.
 - [x] Colour and icon pickers
 - [x] Export a backup (JSON, shared as a file)
 - [x] Import a backup — confirmed first, decoded as UTF-8, dialog on failure
+- [x] Export a spreadsheet — CSV, oldest first, quoted, plain decimal amounts
 
 ### Release
 - [x] `key.properties` + a 4096-bit keystore; release builds are properly signed
@@ -483,25 +581,17 @@ downloads.
 
 ## Known gaps — fix before new features
 
-- **A contribution is always dated today.** The sheet has no date picker — the
-  row it writes is an ordinary transfer, so the fix is to open it in the ledger
-  and change the date there. Fine until someone catches up a month of saving in
-  one sitting.
-- **A hand-edited backup can still put an expense on the Goals account.** The
-  pickers no longer offer it, so nothing in the app can do it by accident, but
-  an import reads what it is given. `statusOf` floors at zero rather than going
-  negative, which is the safe way to be wrong.
+None right now. The last one went when a contribution learned to carry a date;
+before that, the Goals account stopped being spendable and the page learned to
+say so when a backup claims otherwise. New ones belong here rather than in the
+backlog: a gap is something that is wrong, not something that is missing.
 
 ## Backlog
 
-### Next up — in order, and why this order
-1. **Duplicate a transaction.** *Minutes.* Long press a row → copy it to today.
-   The cheapest entry shortcut left, and it needs no new model.
-2. **CSV export.** *An hour.* JSON is the backup; CSV is what goes to a
-   spreadsheet or an accountant. Ten lines beside `exportJson`.
-3. **Calendar month view.** *A day.* A month grid showing each day's net rather
-   than shaded spend. The heatmap proves the layout; this is a different cell.
-   The highest "oh, *that* is where it went" per unit of work.
+### Next up
+All three that were here have shipped — hold a row to copy it, the spreadsheet
+export, and the calendar of daily nets. What is below is what is left, still in
+rough order of what it buys against what it costs.
 
 ### Small — an afternoon, no new dependencies
 - Month-over-month per category — "Food is ₹1,800 more than last month"
