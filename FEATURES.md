@@ -3,7 +3,7 @@
 Working checklist for what's built, what's broken, and what's next. Tick a box
 when it ships. Keep entries one line; the reasoning lives in the code comments.
 
-**Status:** 20 source files · 12,069 lines · 292 tests · 14 goldens · 4 runtime deps
+**Status:** 20 source files · 12,101 lines · 297 tests · 14 goldens · 4 runtime deps
 **Verified on:** Android device — runs, rupee and mono render, data survives a cold
 kill. That was *before* Goals and the bottom dock, and before the deep-green
 chrome and the rebuilt Insights; all four are covered by tests and goldens and
@@ -554,6 +554,8 @@ downloads.
 - [x] Export a backup (JSON, shared as a file)
 - [x] Import a backup — confirmed first, decoded as UTF-8, dialog on failure
 - [x] Export a spreadsheet — CSV, oldest first, quoted, plain decimal amounts
+- [x] Show the intro again — the same three screens, and the seed behind them
+      stays the no-op it already was
 
 ### Release
 - [x] `key.properties` + a 4096-bit keystore; release builds are properly signed

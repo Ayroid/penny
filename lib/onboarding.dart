@@ -36,6 +36,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
     } else {
       widget.store.finishOnboarding();
+      // First run: already onboarded is false -> true, and the root widget
+      // swaps itself out from under this screen. Replayed from settings, that
+      // flip already happened, so nothing will do it again — this screen has
+      // to pop itself off whatever pushed it.
+      if (Navigator.canPop(context)) Navigator.pop(context);
     }
   }
 

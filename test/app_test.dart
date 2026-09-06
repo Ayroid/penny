@@ -1117,6 +1117,44 @@ void main() {
     });
   });
 
+  group('replaying the intro from settings', () {
+    testWidgets('opens onboarding and returns to settings when finished', (
+      tester,
+    ) async {
+      phone(tester);
+      // emptyStore already seeds the default accounts and categories, which
+      // is what makes replaying a no-op worth asserting on.
+      final store = await emptyStore();
+      final before = store.accounts.length;
+
+      await tester.pumpWidget(wrap(SettingsScreen(store: store)));
+      await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.text('Show the intro again'),
+        find.byType(Scrollable).first,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Show the intro again'));
+      await tester.pumpAndSettle();
+
+      expect(find.text("I'm Penny"), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Start'));
+      await tester.pumpAndSettle();
+      // Already seeded, so the seed on this page must be a no-op rather than
+      // doubling up the default accounts and categories.
+      await tester.tap(find.widgetWithText(FilledButton, 'Looks good'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add my first entry'));
+      await tester.pumpAndSettle();
+
+      expect(store.accounts, hasLength(before));
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text("I'm Penny"), findsNothing);
+    });
+  });
+
   group('pinning accounts to the card', () {
     test('nothing pinned means the app picks the first four', () async {
       final store = await emptyStore();

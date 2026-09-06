@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'icons.dart';
 import 'money.dart';
+import 'onboarding.dart';
 import 'recurring.dart';
 import 'sheets.dart';
 import 'store.dart';
@@ -150,6 +151,19 @@ class _Body extends StatelessWidget {
                 last: true,
               ),
             ],
+          ),
+        ),
+        section('About'),
+        SoftCard(
+          padding: EdgeInsets.zero,
+          child: _Row(
+            icon: LucideIcons.sparkles,
+            label: 'Show the intro again',
+            subtitle: 'The three screens from first launch',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => OnboardingScreen(store: store)),
+            ),
+            last: true,
           ),
         ),
         const SizedBox(height: 24),
