@@ -209,11 +209,7 @@ class _Shortfall extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              LucideIcons.triangleAlert,
-              size: 18,
-              color: scheme.onSurface,
-            ),
+            Icon(LucideIcons.triangleAlert, size: 18, color: scheme.onSurface),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -722,9 +718,10 @@ Future<void> _showGoal(
   PennyStore store,
   Goal goal,
 ) async {
-  final asked = await showModalBottomSheet<
-    ({_Ask ask, int amount, String accountId, DateTime day})
-  >(
+  final asked =
+      await showModalBottomSheet<
+        ({_Ask ask, int amount, String accountId, DateTime day})
+      >(
         context: context,
         isScrollControlled: true,
         builder: (context) => _ContributeSheet(store: store, goal: goal),

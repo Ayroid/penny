@@ -402,11 +402,7 @@ const undoLinger = Duration(seconds: 4);
 /// that lift clears both. Adding the pill's height on top of it, which this
 /// did while the button floated higher up, left the bar hanging a pill and a
 /// half above the thing it was clearing.
-void showUndoBar(
-  BuildContext context,
-  String message, {
-  VoidCallback? onUndo,
-}) {
+void showUndoBar(BuildContext context, String message, {VoidCallback? onUndo}) {
   ScaffoldMessenger.of(context)
     // One at a time. Tapping a pinned chip twice should leave one offer to
     // undo, not two stacked bars racing each other out.

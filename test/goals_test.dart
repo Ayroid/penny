@@ -150,20 +150,28 @@ void main() {
       );
     });
 
-    test('it can be dated back, for a month caught up in one sitting', () async {
-      final store = await emptyStore();
-      final g = phone();
-      store.addGoal(g);
-      final when = shiftDays(today(), -12);
+    test(
+      'it can be dated back, for a month caught up in one sitting',
+      () async {
+        final store = await emptyStore();
+        final g = phone();
+        store.addGoal(g);
+        final when = shiftDays(today(), -12);
 
-      final row = store.putAside(g, 30000, store.accounts.first.id, on: when)!;
-      expect(row.day, dayKey(when));
-      expect(
-        store.statusOf(g).saved,
-        30000,
-        reason: 'the goal counts by tag, not by date',
-      );
-    });
+        final row = store.putAside(
+          g,
+          30000,
+          store.accounts.first.id,
+          on: when,
+        )!;
+        expect(row.day, dayKey(when));
+        expect(
+          store.statusOf(g).saved,
+          30000,
+          reason: 'the goal counts by tag, not by date',
+        );
+      },
+    );
 
     test('and so can taking it back out', () async {
       final store = await emptyStore();
@@ -335,8 +343,16 @@ void main() {
 
     test('the shortfall is what the goals claim and cannot have', () async {
       final (store, g) = await drained(40000, 30000);
-      expect(store.statusOf(g).saved, 40000, reason: 'the goal still claims it');
-      expect(store.totalSetAside, 10000, reason: 'the account does not hold it');
+      expect(
+        store.statusOf(g).saved,
+        40000,
+        reason: 'the goal still claims it',
+      );
+      expect(
+        store.totalSetAside,
+        10000,
+        reason: 'the account does not hold it',
+      );
       expect(store.goalsShortfall, 30000);
     });
 
