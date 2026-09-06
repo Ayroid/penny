@@ -258,6 +258,82 @@ void main() {
     ]);
   });
 
+  group('the spreadsheet export', () {
+    Future<PennyStore> withRows() async {
+      final s = await seeded();
+      final cash = acc(s, 'Cash');
+      final bank = acc(s, 'Bank');
+      s.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: 45050,
+          day: '2026-09-02',
+          categoryId: cat(s, 'Groceries'),
+          accountId: cash,
+          note: 'Lunch, with "the team"',
+        ),
+      );
+      s.addTxn(
+        Txn(
+          kind: TxKind.income,
+          amountMinor: 8500000,
+          day: '2026-09-01',
+          categoryId: cat(s, 'Salary'),
+          accountId: bank,
+        ),
+      );
+      s.addTxn(
+        Txn(
+          kind: TxKind.transfer,
+          amountMinor: 100000,
+          day: '2026-09-03',
+          categoryId: cat(s, 'Groceries'),
+          accountId: bank,
+          toAccountId: cash,
+        ),
+      );
+      return s;
+    }
+
+    test('is a header and one line per row, oldest first', () async {
+      final lines = (await withRows()).exportCsv().trim().split('\n');
+      expect(lines.first.startsWith('Date,Kind,Amount'), isTrue);
+      expect(lines, hasLength(4));
+      expect(lines[1], startsWith('"2026-09-01"'));
+      expect(lines[3], startsWith('"2026-09-03"'));
+    });
+
+    test('an expense is negative and a transfer is neither', () async {
+      final lines = (await withRows()).exportCsv().split('\n');
+      expect(lines[1], contains(',85000.00,'), reason: 'income, positive');
+      expect(lines[2], contains(',-450.50,'), reason: 'expense, negative');
+      // Zero in the amount column, its own figure in the transfer column: it
+      // moved money without spending or earning it.
+      expect(lines[3], contains(',0.00,1000.00,'));
+    });
+
+    test('a note with a comma and a quote survives', () async {
+      final lines = (await withRows()).exportCsv().split('\n');
+      expect(lines[2], endsWith('"Lunch, with ""the team"""'));
+      expect(
+        lines[2].split(',').length,
+        greaterThan(8),
+        reason: 'the comma is inside a quoted cell, which is the point',
+      );
+    });
+
+    test('names, not ids', () async {
+      final lines = (await withRows()).exportCsv().split('\n');
+      expect(lines[2], contains('"Groceries"'));
+      expect(lines[2], contains('"Cash"'));
+    });
+
+    test('an empty ledger is a header and nothing else', () async {
+      final s = await seeded();
+      expect(s.exportCsv().trim().split('\n'), hasLength(1));
+    });
+  });
+
   group('backup', () {
     test('export then import is a round trip', () async {
       final s = await seeded();

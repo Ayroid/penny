@@ -122,13 +122,31 @@ class _Body extends StatelessWidget {
                 icon: LucideIcons.upload,
                 label: 'Export a backup',
                 subtitle: 'A JSON file you keep',
-                onTap: () => _export(context, store),
+                onTap: () => _share(
+                  context,
+                  store.exportJson(),
+                  extension: 'json',
+                  label: 'Penny backup',
+                ),
               ),
               _Row(
                 icon: LucideIcons.download,
                 label: 'Import a backup',
                 subtitle: 'Replaces everything here',
                 onTap: () => _import(context, store),
+              ),
+              // Under the backup rather than beside it: this one goes out and
+              // does not come back, and the row says so in its own words.
+              _Row(
+                icon: LucideIcons.table,
+                label: 'Export a spreadsheet',
+                subtitle: '${plural(store.txns.length, 'row')} of CSV',
+                onTap: () => _share(
+                  context,
+                  store.exportCsv(),
+                  extension: 'csv',
+                  label: 'Penny transactions',
+                ),
                 last: true,
               ),
             ],
@@ -205,13 +223,21 @@ class _Row extends StatelessWidget {
 
 // ── Backup ──────────────────────────────────────────────────────────────────
 
-Future<void> _export(BuildContext context, PennyStore store) async {
+/// Writes [contents] to a temp file named for today and hands it to the
+/// platform's own share sheet. The backup and the spreadsheet are the same
+/// three lines with a different extension.
+Future<void> _share(
+  BuildContext context,
+  String contents, {
+  required String extension,
+  required String label,
+}) async {
   final dir = await Directory.systemTemp.createTemp('penny');
-  final file = File('${dir.path}/penny-${dayKey(today())}.json');
-  await file.writeAsString(store.exportJson());
+  final file = File('${dir.path}/penny-${dayKey(today())}.$extension');
+  await file.writeAsString(contents);
   if (!context.mounted) return;
   await SharePlus.instance.share(
-    ShareParams(files: [XFile(file.path)], text: 'Penny backup'),
+    ShareParams(files: [XFile(file.path)], text: label),
   );
 }
 

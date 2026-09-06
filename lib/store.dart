@@ -1283,6 +1283,54 @@ class PennyStore extends ChangeNotifier {
     'goals': [for (final g in goals) g.toJson()],
   });
 
+  /// The ledger as a spreadsheet reads it: oldest first, one row per
+  /// transaction, names rather than ids.
+  ///
+  /// Not a backup — [exportJson] is the backup, and this cannot be imported
+  /// back. It is for the person who wants to sort, pivot, or hand the year to
+  /// somebody who works in columns.
+  ///
+  /// Amounts are plain decimal rupees with no symbol and no grouping: a
+  /// spreadsheet has to read them as numbers, and `₹1,20,450.00` is a string
+  /// in every one of them. The sign is the kind's, so an expense is negative
+  /// and a total down the column means something. A transfer is zero — it
+  /// moved money without spending or earning it — and carries its amount in
+  /// its own column instead.
+  String exportCsv() {
+    // Anything can appear in a note, including the separator and the quote.
+    String cell(String raw) => '"${raw.replaceAll('"', '""')}"';
+    // Always two decimal places and never empty, which `amountFieldText`
+    // cannot promise — it drops them for a whole number and returns '' for a
+    // zero, and a column with holes in it is a column nothing can sum.
+    String amount(int minor) =>
+        '${minor ~/ 100}.${(minor % 100).toString().padLeft(2, '0')}';
+
+    final rows = <String>[
+      'Date,Kind,Amount,Transferred,Category,Account,To account,Note',
+      // Oldest first: a ledger read top to bottom is a ledger that adds up as
+      // you go, and the newest-first order is a screen decision, not a data
+      // one.
+      for (final t in txns.reversed)
+        [
+          cell(t.day),
+          cell(t.kind.name),
+          switch (t.kind) {
+            TxKind.income => amount(t.amountMinor),
+            TxKind.expense => '-${amount(t.amountMinor)}',
+            TxKind.transfer => '0.00',
+          },
+          t.kind == TxKind.transfer ? amount(t.amountMinor) : '',
+          cell(categoryById(t.categoryId)?.name ?? ''),
+          cell(accountById(t.accountId)?.name ?? ''),
+          cell(accountById(t.toAccountId ?? '')?.name ?? ''),
+          cell(t.note),
+        ].join(','),
+    ];
+    // A trailing newline, because a file that ends mid-line trips some
+    // importers and no spreadsheet minds the blank.
+    return '${rows.join('\n')}\n';
+  }
+
   /// Replace everything with [raw]. Returns false and changes nothing if the
   /// file cannot be read — decoding happens before any list is cleared.
   bool importJson(String raw) {
