@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:penny/clock.dart';
 import 'package:penny/theme.dart';
 
 /// [fg] at [alpha] painted over [bg] — what a tinted well actually resolves to.
@@ -104,30 +105,52 @@ void main() {
     });
   });
 
+  group('the sky over the balance', () {
+    // Four cuts of the range, and the boundaries between them are the same
+    // ones the greeting reads — a card that says good evening under a midday
+    // sun is the bug this pins.
+    test('follows the clock, like the greeting does', () {
+      final previous = useFixedClock(DateTime(2026, 9, 17, 8));
+      addTearDown(() => clock = previous);
+
+      for (final (hour, image, hello) in [
+        (7, 'morning', 'Good morning'),
+        (13, 'afternoon', 'Good afternoon'),
+        (18, 'evening', 'Good evening'),
+        (23, 'night', 'Good evening'),
+      ]) {
+        useFixedClock(DateTime(2026, 9, 17, hour));
+        expect(landingImage(), 'assets/images/${image}_landing.png');
+        expect(greeting(), hello);
+      }
+    });
+  });
+
   group('the spend heatmap', () {
     // Penny's heatmap is brand-hued: one colour for the whole month, unlike
     // Wick's per-habit grids. So there is exactly one pair to hold up, not 21.
     for (final dark in [true, false]) {
       final where = dark ? 'dark' : 'light';
       final accent = dark ? sproutDark : sprout;
+      // The top of the ramp: the deep tone on cream, the lit sprout at night
+      // — see the note in home.dart's `_Cell`.
+      final lit = dark ? sproutDark : sproutDeep;
       final ground = dark ? darkBg : warmBg;
 
       // The card, and the well the cells are read against. At night that well
       // is a dark panel; on cream the grid sits straight on the card so the
       // card's hover and press ink reach it — see `gridWell`.
       final well = over(accent, dark ? 0.07 : 0.035, ground);
-      final unlit = over(accent, dark ? 0.16 : 0.26, well);
+      final unlit = over(accent, dark ? 0.16 : 0.38, well);
 
       test('$where: a spent day is distinct from an empty one', () {
-        // On cream both cells are the accent — full strength against a wash of
-        // itself — so the gap there is saturation, not luminance, and the 3:1
-        // rule the dark well was built for cannot be met without darkening the
-        // brand colour. The cell is decoration: every amount it encodes is
-        // also printed as text on the same screen. Wick made the same call and
-        // lands at 1.15; the sprout measures ~1.90.
+        // Cream used to be the documented exception here — accent against a
+        // wash of itself is a saturation gap, not a luminance one, and topped
+        // out near 1.9. Drawing the busy end in the deep tone instead settles
+        // it at 6:1 and the exception is gone.
         expect(
-          contrastBetween(accent, unlit),
-          greaterThanOrEqualTo(dark ? 3.0 : 1.8),
+          contrastBetween(lit, unlit),
+          greaterThanOrEqualTo(3.0),
           reason: '$where: a spent cell is not distinct from an empty one',
         );
       });

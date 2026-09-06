@@ -24,11 +24,19 @@ const navySoft = Color(0xFF33487C);
 const sprout = Color(0xFF34B863);
 const sproutSoft = Color(0xFFE6F6EC);
 // The sprout with the lights off — the one green dark enough to carry white
-// text (the accent itself is 2.57:1 against white and fails outright). Exists
-// for the hero panel on Goals, the app's one filled card: everything else
-// separates surfaces with tint.
-const sproutDeep = Color(0xFF0D4531);
-const sproutDeepDark = Color(0xFF10412F);
+// text (the accent itself is 2.57:1 against white and fails outright).
+//
+// This is what every FILLED piece of brand chrome is drawn in: the tab pill,
+// the segmented pill, the FAB, primary buttons, the Goals hero, the heaviest
+// heatmap cell. The lit sprout above stays the *wash* — tints, credit
+// amounts, glyphs — so the app reads dark green without the washes going
+// grey, which is what a single dark accent would do to them.
+//
+// Dark mode cannot use the same tone: #10412F on a near-black ground is
+// 1.8:1 and the pill disappears. This one clears 3:1 on black and still
+// carries white at 5.3:1.
+const sproutDeep = Color(0xFF145234);
+const sproutDeepDark = Color(0xFF1F7A4D);
 
 const warmBg = Color(0xFFFFF8F1);
 const warmSunk = Color(0xFFF4ECE3);
@@ -78,8 +86,12 @@ bool isDark(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
 Color sproutOf(BuildContext c) => isDark(c) ? sproutDark : sprout;
 Color sproutSoftOf(BuildContext c) => isDark(c) ? sproutSoftDark : sproutSoft;
 
-/// The deep sprout — the filled panel white sits on. See [sproutDeep].
+/// The deep sprout — every filled piece of brand chrome. See [sproutDeep].
 Color sproutDeepOf(BuildContext c) => isDark(c) ? sproutDeepDark : sproutDeep;
+
+/// Ink on a deep-sprout fill. White, and not computed: carrying white is the
+/// whole reason the deep tone exists (9.1:1 in light, 5.3:1 in dark).
+const onSproutDeep = Colors.white;
 
 /// The coin. Expense fills and every chart bar — the design system reserves
 /// the accent so it never has to fill a chart.
@@ -117,12 +129,9 @@ ThemeData appTheme({required bool dark}) {
   final muted = dark ? darkMuted : navySoft;
   final sunk = dark ? darkSunk : warmSunk;
   final border = dark ? darkSunk : warmGray;
-  final accent = dark ? sproutDark : sprout;
-
-  // What goes on a full-strength accent fill. Measured, not assumed: white on
-  // #34B863 is 2.57:1 and fails a 15px/700 label outright, while navy is 5.43.
-  // Wick could hardcode white because its flame is darker; this palette cannot.
-  const onAccentConst = navy;
+  // Filled chrome is the deep tone; the lit sprout stays the wash.
+  final fill = dark ? sproutDeepDark : sproutDeep;
+  const onFill = onSproutDeep;
 
   TextStyle t(
     double size,
@@ -151,8 +160,8 @@ ThemeData appTheme({required bool dark}) {
         : InkRipple.splashFactory,
     colorScheme: ColorScheme(
       brightness: dark ? Brightness.dark : Brightness.light,
-      primary: accent,
-      onPrimary: onAccentConst,
+      primary: fill,
+      onPrimary: onFill,
       secondary: muted,
       onSecondary: bg,
       tertiary: dark ? coinDark : coin,
@@ -189,7 +198,7 @@ ThemeData appTheme({required bool dark}) {
       hintStyle: t(14, FontWeight.w400, color: muted),
       border: _softBorder(Colors.transparent),
       enabledBorder: _softBorder(Colors.transparent),
-      focusedBorder: _softBorder(accent, width: 1.5),
+      focusedBorder: _softBorder(fill, width: 1.5),
     ),
     // Primary action only — the brand asks that the sprout stay meaningful.
     //
@@ -199,13 +208,13 @@ ThemeData appTheme({required bool dark}) {
     // same shape, same ground, obviously inert.
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: accent,
-        foregroundColor: onAccentConst,
+        backgroundColor: fill,
+        foregroundColor: onFill,
         disabledBackgroundColor: sunk,
         disabledForegroundColor: muted.withValues(alpha: 0.6),
         elevation: 0,
         minimumSize: const Size.fromHeight(52),
-        textStyle: t(15, FontWeight.w700, color: onAccentConst),
+        textStyle: t(15, FontWeight.w700, color: onFill),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     ),
@@ -334,6 +343,18 @@ String greeting() {
   if (h < 12) return 'Good morning';
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
+}
+
+/// The landscape behind the balance, picked by the hour the way [greeting] is.
+///
+/// Four cuts of the same range: sunrise, full sun, dusk and a moon. It moves
+/// with the injected clock, so a golden run at a fixed hour draws a fixed sky.
+String landingImage() {
+  final h = clock().hour;
+  if (h < 12) return 'assets/images/morning_landing.png';
+  if (h < 17) return 'assets/images/afternoon_landing.png';
+  if (h < 20) return 'assets/images/evening_landing.png';
+  return 'assets/images/night_landing.png';
 }
 
 /// A card the way the brand draws one: no border, soft shadow, large radius.
@@ -492,7 +513,7 @@ Color gridWell(BuildContext c) =>
 /// An unlit grid cell — present, clearly not filled. Always read against
 /// [gridWell], never against the page. Heavier on cream, where the well is
 /// light and a 16% wash would barely register as a cell.
-Color cellEmpty(BuildContext c) => tint(c, isDark(c) ? 0.16 : 0.26);
+Color cellEmpty(BuildContext c) => tint(c, isDark(c) ? 0.16 : 0.38);
 
 /// Grid furniture: month names and weekday initials. `secondary` at full
 /// strength competes with the cells it labels.
@@ -571,7 +592,7 @@ class RoundIconButton extends StatelessWidget {
           child: Center(
             child: Material(
               color: filled
-                  ? sproutOf(context)
+                  ? sproutDeepOf(context)
                   : (isDark(context) ? darkSunk : const Color(0xFFF0E7DC)),
               shape: const CircleBorder(),
               child: InkWell(
@@ -583,8 +604,7 @@ class RoundIconButton extends StatelessWidget {
                   child: Icon(
                     icon,
                     size: size * 0.5,
-                    // Computed, not white: white on the sprout is 2.57:1.
-                    color: filled ? onAccent(context) : scheme.onSurface,
+                    color: filled ? onSproutDeep : scheme.onSurface,
                   ),
                 ),
               ),
@@ -665,8 +685,8 @@ class Segmented<T> extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final keys = options.keys.toList();
     final index = keys.indexOf(value);
-    final accent = sproutOf(context);
-    final ink = onAccent(context);
+    final accent = sproutDeepOf(context);
+    const ink = onSproutDeep;
 
     return Container(
       padding: const EdgeInsets.all(4),

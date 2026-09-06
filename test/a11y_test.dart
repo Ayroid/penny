@@ -96,11 +96,11 @@ void main() {
   //
   // That guideline samples the two dominant colours inside a text node's rect
   // and calls the lighter one the background. For a selected segmented pill
-  // that rect is mostly the accent fill sitting in a lighter track, so it
-  // measures the fill against the track — 2.19 — and never looks at the navy
-  // glyph on the pill, which is 5.43. It is a false positive on a shape the
-  // design system prescribes, and suppressing it per-widget would hide the
-  // real failures it is there to catch elsewhere.
+  // that rect is mostly the deep fill sitting in a lighter track, so it
+  // measures the fill against the track and never looks at the white glyph on
+  // the pill, which is 9.1. It is a false positive on a shape the design
+  // system prescribes, and suppressing it per-widget would hide the real
+  // failures it is there to catch elsewhere.
   //
   // What is worth pinning here is that the widget actually uses the colours
   // palette_test blessed, so the two files cannot drift apart.
@@ -128,8 +128,8 @@ void main() {
 
       expect(
         labelStyle('Month').color,
-        navy,
-        reason: 'white on the sprout measures 2.57 and must never appear',
+        onSproutDeep,
+        reason: 'the pill is the deep tone, which exists to carry white',
       );
       expect(
         labelStyle('Month').fontWeight,

@@ -184,6 +184,20 @@ void main() {
     });
   });
 
+  group('the chart axis', () {
+    test('rounds the peak up to a 1, 2 or 5', () {
+      expect(niceAxisMax(7843100), 10000000); // ₹78,431 -> ₹1L
+      expect(niceAxisMax(4500), 5000);
+      expect(niceAxisMax(1100), 2000);
+      expect(niceAxisMax(1000), 1000);
+    });
+
+    test('never returns a zero to divide a bar by', () {
+      expect(niceAxisMax(0), greaterThan(0));
+      expect(niceAxisMax(-5), greaterThan(0));
+    });
+  });
+
   group('comparison with the previous period', () {
     final txns = [
       tx(TxKind.expense, 100000, '2026-08-05'),

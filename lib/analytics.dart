@@ -43,12 +43,17 @@ Range rangeFor(Period period, DateTime anchor) {
   };
 }
 
+/// [anchor] moved [by] whole periods — what the arrows over a period do.
+DateTime shiftAnchor(Period period, DateTime anchor, int by) =>
+    switch (period) {
+      Period.day => shiftDays(anchor, by),
+      Period.week => shiftDays(anchor, by * 7),
+      Period.month => shiftMonths(anchor, by),
+    };
+
 /// [range] shifted [by] whole periods — what the overview's month arrows do.
-Range shiftRange(Period period, DateTime anchor, int by) => switch (period) {
-  Period.day => rangeFor(period, shiftDays(anchor, by)),
-  Period.week => rangeFor(period, shiftDays(anchor, by * 7)),
-  Period.month => rangeFor(period, shiftMonths(anchor, by)),
-};
+Range shiftRange(Period period, DateTime anchor, int by) =>
+    rangeFor(period, shiftAnchor(period, anchor, by));
 
 bool inRange(Txn t, Range r) =>
     t.day.compareTo(r.from) >= 0 && t.day.compareTo(r.to) <= 0;
@@ -150,6 +155,20 @@ const _monthShort = [
   'Nov',
   'Dec',
 ];
+
+/// [minor] rounded up to a 1, 2 or 5 at its own magnitude — a chart axis that
+/// tops out at ₹80K rather than at ₹78,431.
+int niceAxisMax(int minor) {
+  if (minor <= 0) return 100;
+  var unit = 1;
+  while (unit * 10 <= minor) {
+    unit *= 10;
+  }
+  for (final step in [1, 2, 5]) {
+    if (minor <= unit * step) return unit * step;
+  }
+  return unit * 10;
+}
 
 /// The same figure one period earlier, for "₹1,800 more than last month".
 ///

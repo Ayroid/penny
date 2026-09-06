@@ -50,6 +50,23 @@ void main() {
     });
   });
 
+  group('the compact axis label', () {
+    test('scales in thousands, lakhs and crores', () {
+      expect(compactRupees(0), '₹0');
+      expect(compactRupees(99900), '₹999');
+      expect(compactRupees(100000), '₹1K');
+      expect(compactRupees(8000000), '₹80K');
+      expect(compactRupees(12000000), '₹1.2L');
+      expect(compactRupees(1000000000), '₹1Cr');
+      expect(compactRupees(-8000000), '-₹80K');
+    });
+
+    test('one decimal, and none when it would be a zero', () {
+      expect(compactRupees(8450000), '₹84.5K');
+      expect(compactRupees(8500000), '₹85K');
+    });
+  });
+
   group('parsing what was typed', () {
     test('a typed amount is rupees, not paise', () {
       // The keypad this replaced built paise-first, so 5-0-0 meant ₹5.00.

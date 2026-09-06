@@ -111,30 +111,42 @@ class TxnRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    amount,
-                    strutStyle: monoStrut(13.5),
-                    style: mono(
-                      13.5,
-                      // Income is the brand's own green because it is the thing
-                      // the app is for. Spending is the plain foreground, not
-                      // red: an ordinary expense is not a failure.
-                      color: txn.kind == TxKind.income
-                          ? sproutOf(context)
-                          : scheme.onSurface,
-                      weight: FontWeight.w700,
-                    ),
+              // Capped rather than flexed: a `Flexible` here splits the free
+              // space with the title's `Expanded` and leaves a gap at the
+              // right on every ordinary row. Figures wider than the cap —
+              // a crore, which used to overflow the row outright — scale
+              // down into it instead.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 160),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        amount,
+                        strutStyle: monoStrut(13.5),
+                        style: mono(
+                          13.5,
+                          // Income is the brand's own green because it is the thing
+                          // the app is for. Spending is the plain foreground, not
+                          // red: an ordinary expense is not a failure.
+                          color: txn.kind == TxKind.income
+                              ? sproutOf(context)
+                              : scheme.onSurface,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      if (showBalance != null)
+                        Text(
+                          hideAmount ? maskedAmount : rupeesWhole(showBalance!),
+                          style: mono(11, color: scheme.secondary),
+                        ),
+                    ],
                   ),
-                  if (showBalance != null)
-                    Text(
-                      hideAmount ? maskedAmount : rupeesWhole(showBalance!),
-                      style: mono(11, color: scheme.secondary),
-                    ),
-                ],
+                ),
               ),
             ],
           ),

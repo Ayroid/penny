@@ -146,9 +146,7 @@ final iconByKey = <String, IconData>{
     if (!_shortlist.contains(entry.key)) entry.key: entry.value,
 };
 
-final _shortlist = {
-  for (final group in iconGroups.values) ...group.keys,
-};
+final _shortlist = {for (final group in iconGroups.values) ...group.keys};
 
 /// Picker order: the shortlist as grouped above, then the rest alphabetically.
 final iconKeys = <String>[

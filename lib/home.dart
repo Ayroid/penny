@@ -29,32 +29,12 @@ class _HomePageState extends State<HomePage> {
   /// place you were in.
   DateTime _anchor = today();
 
-  void _step(int by) => setState(
-    () => _anchor = switch (_period) {
-      Period.day => shiftDays(_anchor, by),
-      Period.week => shiftDays(_anchor, by * 7),
-      Period.month => shiftMonths(_anchor, by),
-    },
-  );
-
-  /// The next period is only reachable while it is not entirely in the future.
-  bool get _canGoForward =>
-      rangeFor(_period, _anchor).to.compareTo(dayKey(today())) < 0;
-
-  String get _rangeLabel {
-    final r = rangeFor(_period, _anchor);
-    final from = parseDay(r.from);
-    return switch (_period) {
-      Period.day => r.from == dayKey(today()) ? 'Today' : longDate(from),
-      Period.week => '${shortDate(from)} — ${shortDate(parseDay(r.to))}',
-      Period.month => '${months[from.month - 1]} ${from.year}',
-    };
-  }
+  void _step(int by) =>
+      setState(() => _anchor = shiftAnchor(_period, _anchor, by));
 
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
-    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final range = rangeFor(_period, _anchor);
     final totals = totalsIn(store.txns, range);
@@ -122,38 +102,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 12),
 
-            Row(
-              children: [
-                RoundIconButton(
-                  icon: LucideIcons.chevronLeft,
-                  tooltip: 'Previous ${_period.label.toLowerCase()}',
-                  size: 36,
-                  onPressed: () => _step(-1),
-                ),
-                Expanded(
-                  child: Text(
-                    _rangeLabel,
-                    textAlign: TextAlign.center,
-                    style: mono(
-                      12.5,
-                      color: scheme.secondary,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Opacity(
-                  // Kept in the layout rather than removed, so the label
-                  // does not jump sideways at the present period.
-                  opacity: _canGoForward ? 1 : 0.25,
-                  child: RoundIconButton(
-                    icon: LucideIcons.chevronRight,
-                    tooltip: 'Next ${_period.label.toLowerCase()}',
-                    size: 36,
-                    onPressed: () => _canGoForward ? _step(1) : null,
-                  ),
-                ),
-              ],
-            ),
+            PeriodNav(period: _period, anchor: _anchor, onStep: _step),
             const SizedBox(height: 12),
 
             _FlowCard(totals: totals, hidden: store.hideAmounts),
@@ -205,71 +154,263 @@ class _BalanceCard extends StatelessWidget {
     final total = store.totalBalance;
 
     return TintCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      // The card carries its own padding: the landscape behind the numbers
+      // has to run to the card's edge, and a margin would frame it as a
+      // picture hung on the card rather than the sky behind it.
+      padding: EdgeInsets.zero,
+      child: Stack(
         children: [
-          Row(
-            children: [
-              Text('TOTAL BALANCE', style: text.labelSmall),
-              const Spacer(),
-              // Masking is a per-device preference, not a lock: it is for a
-              // shared desk or someone reading over a shoulder, and it says so
-              // by being one tap away in both directions.
-              RoundIconButton(
-                icon: store.hideAmounts ? LucideIcons.eyeOff : LucideIcons.eye,
-                tooltip: store.hideAmounts ? 'Show amounts' : 'Hide amounts',
-                size: 32,
-                onPressed: () => store.setHideAmounts(!store.hideAmounts),
+          // The range behind the numbers, at the hour it actually is. The
+          // greeting above the card already moves with the clock; this is the
+          // same sentence in a picture. Only the top of the drawing is used —
+          // the peaks — so the tiles below sit on clean ground.
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              // Sat on the card's bottom edge, which is where a horizon goes:
+              // anchored anywhere else it reads as a sticker with a straight
+              // cut across it. Faded on the left so the tiles above keep a
+              // quiet corner to sit in.
+              child: ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (rect) => const LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [Colors.transparent, Colors.white],
+                  stops: [0.05, 0.45],
+                ).createShader(rect),
+                child: Image.asset(
+                  landingImage(),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.bottomCenter,
+                  excludeFromSemantics: true,
+                ),
               ),
-            ],
-          ),
-          Text(
-            store.hideAmounts ? maskedAmount : rupees(total),
-            strutStyle: monoStrut(29),
-            style: mono(
-              29,
-              color: scheme.onSurface,
-              weight: FontWeight.w800,
-              spacing: -0.5,
             ),
           ),
-          // What the goals have spoken for, and what is left after them. The
-          // whole point of a goal is knowing the second number — money set
-          // aside is still in the balance above, and without this line the
-          // balance quietly overstates what there is to spend.
-          if (store.totalSetAside > 0)
-            Text(
-              '${store.show(rupeesWhole(store.totalSetAside))} set aside · '
-              '${store.show(rupeesWhole(total - store.totalSetAside))} free',
-              strutStyle: monoStrut(11.5),
-              style: mono(11.5, color: scheme.secondary),
+          Padding(
+            // With tiles the row itself is the card's bottom edge and the
+            // range runs behind it; without them the strip along the bottom
+            // is kept clear — the range is the card's ground line, not
+            // something to write over.
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              store.liveAccounts.length > 1 ? 12 : 88,
             ),
-          if (store.liveAccounts.length > 1) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final a in store.liveAccounts)
-                  CategoryAccent(
-                    color: catColorAt(a.color),
-                    child: Builder(
-                      builder: (context) => TintChip(
-                        icon: iconFor(a.icon),
-                        label: store.hideAmounts
-                            ? '${a.name}  $maskedAmount'
-                            : '${a.name}  ${rupeesWhole(store.balanceOf(a.id))}',
-                        semanticsLabel: store.hideAmounts
-                            ? '${a.name}, hidden'
-                            : '${a.name}, ${rupees(store.balanceOf(a.id))}',
+                Text('TOTAL BALANCE', style: text.labelSmall),
+                // Scaled down rather than wrapped: a balance in crores is one
+                // line at a smaller size, and a second line would push the
+                // account row and the range below it down the card.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    store.hideAmounts ? maskedAmount : rupees(total),
+                    maxLines: 1,
+                    strutStyle: monoStrut(29),
+                    style: mono(
+                      29,
+                      color: scheme.onSurface,
+                      weight: FontWeight.w800,
+                      spacing: -0.5,
+                    ),
+                  ),
+                ),
+                // What the goals have spoken for, and what is left after them. The
+                // whole point of a goal is knowing the second number — money set
+                // aside is still in the balance above, and without this line the
+                // balance quietly overstates what there is to spend.
+                // Drawn even with nothing set aside — empty, but the strut
+                // holds the line — so the card is one height whether or not
+                // there are goals.
+                Text(
+                  store.totalSetAside > 0
+                      ? '${store.show(rupeesWhole(store.totalSetAside))} set aside · '
+                            '${store.show(rupeesWhole(total - store.totalSetAside))} free'
+                      : '',
+                  strutStyle: monoStrut(11.5),
+                  style: mono(11.5, color: scheme.secondary),
+                ),
+                if (store.liveAccounts.length > 1) ...[
+                  const SizedBox(height: 32),
+                  // Tiles rather than a wrap of pills: the name and the figure
+                  // sit on two lines instead of one long one, so four accounts
+                  // fit across the card and each reads as its own small
+                  // ledger.
+                  LayoutBuilder(
+                    builder: (context, box) {
+                      final columns = box.maxWidth >= 320 ? 4 : 3;
+                      final width =
+                          (box.maxWidth - 8 * (columns - 1)) / columns;
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final a in store.liveAccounts)
+                            SizedBox(
+                              width: width,
+                              child: _AccountTile(
+                                name: a.name,
+                                icon: iconFor(a.icon),
+                                colour: catColorAt(a.color),
+                                amount: store.hideAmounts
+                                    ? maskedAmount
+                                    : rupeesWhole(store.balanceOf(a.id)),
+                                semanticsLabel: store.hideAmounts
+                                    ? '${a.name}, hidden'
+                                    : '${a.name}, '
+                                          '${rupees(store.balanceOf(a.id))}',
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Masking is a per-device preference, not a lock: it is for a
+          // shared desk or someone reading over a shoulder, and it says so
+          // by being one tap away in both directions. Pinned to the corner
+          // rather than sharing a row with the label: at 32px it was the
+          // tallest thing on that line and pushed the words down the card.
+          //
+          // Last in the stack, not first: the balance line runs under this
+          // corner, and the one painted last is the one a tap lands on.
+          Positioned(
+            top: 12,
+            right: 12,
+            child: RoundIconButton(
+              icon: store.hideAmounts ? LucideIcons.eyeOff : LucideIcons.eye,
+              tooltip: store.hideAmounts ? 'Show amounts' : 'Hide amounts',
+              size: 32,
+              onPressed: () => store.setHideAmounts(!store.hideAmounts),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The tile's ground: the account's colour over the card's, then thirty
+/// percent darker than that mix.
+///
+/// The landscape runs behind these tiles rather than stopping at them, and a
+/// pale wash with a mountain showing through it is a tile nobody can read a
+/// figure off.
+Color _tileGround(BuildContext context, Color colour) {
+  final mixed = Color.alphaBlend(
+    colour.withValues(alpha: isDark(context) ? 0.22 : 0.18),
+    Color.alphaBlend(
+      cardTint(context),
+      Theme.of(context).scaffoldBackgroundColor,
+    ),
+  );
+  final hsl = HSLColor.fromColor(mixed);
+  return hsl.withLightness((hsl.lightness * 0.9).clamp(0.0, 1.0)).toColor();
+}
+
+/// One account: what it is called, and what is in it.
+class _AccountTile extends StatelessWidget {
+  const _AccountTile({
+    required this.name,
+    required this.icon,
+    required this.colour,
+    required this.amount,
+    required this.semanticsLabel,
+  });
+
+  final String name;
+  final IconData icon;
+  final Color colour;
+  final String amount;
+  final String semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Semantics(
+      label: semanticsLabel,
+      excludeSemantics: true,
+      // A fixed box, by design: the mask is a different width from a number
+      // and every account holds a different figure, so a tile that sized
+      // itself would shuffle the row on every tap of the eye. The height is
+      // stated here and the amount shrinks into it.
+      //
+      // Which is also why the scaler is clamped: text can still grow with the
+      // system setting, but past this the figure scales down instead of
+      // pushing through the bottom of the box.
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.3,
+        child: Container(
+          height: 50,
+          padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
+          decoration: BoxDecoration(
+            color: _tileGround(context, colour),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 13, color: colour),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      strutStyle: const StrutStyle(
+                        fontFamily: fontFamily,
+                        fontSize: 11,
+                        forceStrutHeight: true,
+                      ),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.secondary,
                       ),
                     ),
                   ),
-              ],
-            ),
-          ],
-        ],
+                ],
+              ),
+              const SizedBox(height: 3),
+              // A fixed line, whatever the figure: the mask is a different width
+              // from a number, and a box that scales its own height moves the
+              // whole page when the eye is tapped.
+              // Whatever is left of the fixed box, and the figure is scaled
+              // down to fit it: a lakh in one account must not make its tile
+              // taller or wider than the empty one beside it.
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    amount,
+                    strutStyle: monoStrut(13),
+                    style: mono(
+                      12.5,
+                      color: scheme.onSurface,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -523,13 +664,17 @@ class _Cell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // An empty day is the unlit wash; the heaviest is the accent at full
-    // strength; everything between scales linearly off the month's peak.
+    // An empty day is the unlit wash; the heaviest is the deep sprout the
+    // rest of the filled chrome is drawn in; everything between rides the
+    // ramp between them, scaled off the month's peak.
     final t = peak == 0 ? 0.0 : (amount / peak).clamp(0.0, 1.0);
-    final empty = isDark(context) ? 0.16 : 0.26;
+    // At night the top of the ramp stays the lit sprout: the deep tone is
+    // only 2.5:1 against an unlit cell on black, and the grid is the one
+    // place the pair has to be told apart.
+    final lit = isDark(context) ? sproutOf(context) : sproutDeepOf(context);
     final colour = amount == 0
         ? cellEmpty(context)
-        : sproutOf(context).withValues(alpha: empty + (1 - empty) * t);
+        : Color.lerp(cellEmpty(context), lit, t)!;
 
     return Semantics(
       label: amount == 0

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import 'analytics.dart';
 import 'analytics_screen.dart';
 import 'icons.dart';
 import 'money.dart';
@@ -66,6 +67,78 @@ class PageBar extends StatelessWidget {
           for (final a in actions) ...[const SizedBox(width: 8), a],
         ],
       ),
+    );
+  }
+}
+
+/// `‹  September 2026  ›` — the window being read, and the arrows that move it.
+///
+/// Shared by the overview and Insights. The two step through the same windows,
+/// and a second copy is how they end up disagreeing about where a week starts.
+class PeriodNav extends StatelessWidget {
+  const PeriodNav({
+    super.key,
+    required this.period,
+    required this.anchor,
+    required this.onStep,
+  });
+
+  final Period period;
+  final DateTime anchor;
+
+  /// -1 for the period before, +1 for the one after.
+  final ValueChanged<int> onStep;
+
+  /// The next period is only reachable while it is not entirely in the future.
+  static bool canGoForward(Period period, DateTime anchor) =>
+      rangeFor(period, anchor).to.compareTo(dayKey(today())) < 0;
+
+  static String labelFor(Period period, DateTime anchor) {
+    final r = rangeFor(period, anchor);
+    final from = parseDay(r.from);
+    return switch (period) {
+      Period.day => r.from == dayKey(today()) ? 'Today' : longDate(from),
+      Period.week => '${shortDate(from)} — ${shortDate(parseDay(r.to))}',
+      Period.month => '${months[from.month - 1]} ${from.year}',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final forward = canGoForward(period, anchor);
+    final unit = period.label.toLowerCase();
+
+    return Row(
+      children: [
+        RoundIconButton(
+          icon: LucideIcons.chevronLeft,
+          tooltip: 'Previous $unit',
+          size: 36,
+          onPressed: () => onStep(-1),
+        ),
+        Expanded(
+          child: Text(
+            labelFor(period, anchor),
+            textAlign: TextAlign.center,
+            style: mono(
+              12.5,
+              color: Theme.of(context).colorScheme.secondary,
+              weight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Opacity(
+          // Kept in the layout rather than removed, so the label does not
+          // jump sideways at the present period.
+          opacity: forward ? 1 : 0.25,
+          child: RoundIconButton(
+            icon: LucideIcons.chevronRight,
+            tooltip: 'Next $unit',
+            size: 36,
+            onPressed: () => forward ? onStep(1) : null,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -233,7 +306,7 @@ class PageTabs extends StatelessWidget {
                               heightFactor: 1,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  color: sproutOf(context),
+                                  color: sproutDeepOf(context),
                                   borderRadius: BorderRadius.circular(pill),
                                 ),
                               ),
@@ -287,7 +360,7 @@ class _Tab extends StatelessWidget {
     // Colour is never the only signal: the lit pill is a filled shape that
     // arrives under the glyph, and the glyph's own ink crosses to the colour
     // measured against it.
-    final ink = Color.lerp(scheme.secondary, onAccent(context), weight)!;
+    final ink = Color.lerp(scheme.secondary, onSproutDeep, weight)!;
 
     return Semantics(
       button: true,
@@ -542,9 +615,8 @@ class _AddButtonState extends State<AddButton> {
                   // No `tooltip:` where the hold means something: a tooltip
                   // is itself a long press, and the two would fire together.
                   tooltip: holds ? null : widget.tooltip,
-                  backgroundColor: sproutOf(context),
-                  // Computed, not white: white on the sprout measures 2.57:1.
-                  foregroundColor: onAccent(context),
+                  backgroundColor: sproutDeepOf(context),
+                  foregroundColor: onSproutDeep,
                   elevation: 0,
                   focusElevation: 0,
                   hoverElevation: 0,

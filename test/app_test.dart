@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:penny/analytics.dart';
 import 'package:penny/home.dart';
 import 'package:penny/ledger_screen.dart';
 import 'package:penny/analytics_screen.dart';
@@ -273,12 +274,165 @@ void main() {
       ),
     );
 
+    final salary = store.categoriesOf(TxKind.income).first;
+    store.addTxn(
+      Txn(
+        kind: TxKind.income,
+        amountMinor: 900000,
+        day: dayKey(today()),
+        categoryId: salary.id,
+        accountId: cash,
+      ),
+    );
+
     await tester.pumpWidget(wrap(InsightsPage(store: store)));
     await tester.pumpAndSettle();
 
     expect(find.text(cats[0].name), findsOneWidget);
     expect(find.text('75%'), findsOneWidget);
     expect(find.text('25%'), findsOneWidget);
+
+    // Earnings get their own breakdown, in the same shape as the spending
+    // one — not a footnote under it.
+    await tester.dragUntilVisible(
+      find.text('EARNED THIS MONTH'),
+      find.byType(Scrollable).first,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(salary.name), findsOneWidget);
+    expect(find.text('₹9,000.00'), findsOneWidget);
+  });
+
+  testWidgets('insights reads a period either side of today', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    final cash = store.accounts.first.id;
+    final food = store.categoriesOf(TxKind.expense).first.id;
+    // This month and last, so there is something to compare against.
+    for (final (offset, amount) in [(0, 200000), (-1, 100000)]) {
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: amount,
+          day: dayKey(startOfMonth(shiftMonths(today(), offset))),
+          categoryId: food,
+          accountId: cash,
+        ),
+      );
+    }
+
+    await tester.pumpWidget(wrap(InsightsPage(store: store)));
+    await tester.pumpAndSettle();
+
+    final thisMonth = '${months[today().month - 1]} ${today().year}';
+    expect(find.text(thisMonth), findsOneWidget);
+    // Both sides are reported, and in the same shape.
+    expect(find.text('Spending'), findsOneWidget);
+    expect(find.text('Earning'), findsOneWidget);
+    expect(
+      find.text('₹1,000 more than last month · up 100%'),
+      findsOneWidget,
+    );
+
+    // Forward is the future and stays put; back is a month that has its own
+    // figures, not the ones above.
+    await tester.tap(find.byTooltip('Next month'));
+    await tester.pumpAndSettle();
+    expect(find.text(thisMonth), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Previous month'));
+    await tester.pumpAndSettle();
+    final last = shiftMonths(today(), -1);
+    expect(find.text('${months[last.month - 1]} ${last.year}'), findsOneWidget);
+    expect(find.text('₹1,000.00'), findsOneWidget);
+  });
+
+  testWidgets('insights swipes through periods', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    store.addTxn(
+      Txn(
+        kind: TxKind.expense,
+        amountMinor: 45000,
+        day: dayKey(today()),
+        categoryId: store.categoriesOf(TxKind.expense).first.id,
+        accountId: store.accounts.first.id,
+      ),
+    );
+
+    await tester.pumpWidget(wrap(InsightsPage(store: store)));
+    await tester.pumpAndSettle();
+
+    // Dragged right, the earlier period comes in — the same step the left
+    // arrow takes.
+    await tester.fling(
+      find.byType(Segmented<Period>),
+      const Offset(300, 0),
+      800,
+    );
+    await tester.pumpAndSettle();
+
+    final last = shiftMonths(today(), -1);
+    expect(find.text('${months[last.month - 1]} ${last.year}'), findsOneWidget);
+  });
+
+  testWidgets('the day view counts days, not hours', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    store.addTxn(
+      Txn(
+        kind: TxKind.expense,
+        amountMinor: 45000,
+        day: dayKey(today()),
+        categoryId: store.categoriesOf(TxKind.expense).first.id,
+        accountId: store.accounts.first.id,
+      ),
+    );
+
+    await tester.pumpWidget(wrap(InsightsPage(store: store)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Day'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Today'), findsOneWidget);
+    // A week of days, each labelled by its date — the chart never divides a
+    // day into hours.
+    for (var i = 0; i < 7; i++) {
+      final d = shiftDays(today(), -i);
+      expect(
+        find.text('${d.day}'),
+        findsWidgets,
+        reason: 'missing day ${d.day}',
+      );
+    }
+  });
+
+  testWidgets('insights opens the period behind a category', (tester) async {
+    phone(tester);
+    final store = await emptyStore();
+    final cats = store.categoriesOf(TxKind.expense);
+    store.addTxn(
+      Txn(
+        kind: TxKind.expense,
+        amountMinor: 45000,
+        day: dayKey(today()),
+        categoryId: cats[0].id,
+        accountId: store.accounts.first.id,
+        note: 'a coffee',
+      ),
+    );
+
+    await tester.pumpWidget(wrap(InsightsPage(store: store)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(cats[0].name));
+    await tester.pumpAndSettle();
+
+    // The sheet lists what the bar was made of, not just its total — and
+    // says when each row happened, which the row itself never carries.
+    expect(find.textContaining('a coffee'), findsOneWidget);
+    expect(find.text('TODAY'), findsOneWidget);
   });
 
   testWidgets('every screen renders in dark mode too', (tester) async {
@@ -349,7 +503,7 @@ void main() {
       // The one box painted in the accent inside the bar. Three tabs each
       // fading their own background — what this replaced — puts no box at full
       // accent anywhere mid-swipe, and two of them half lit.
-      final accent = sproutOf(tester.element(find.byType(PageTabs)));
+      final accent = sproutDeepOf(tester.element(find.byType(PageTabs)));
       Rect litPill() => tester.getRect(
         find.descendant(
           of: find.byType(PageTabs),
@@ -679,7 +833,9 @@ void main() {
       // The per-account chips have to go too — leaving them is leaving the
       // balance on screen in three pieces.
       expect(find.textContaining('₹85,000'), findsNothing);
-      expect(find.text('Cash  $maskedAmount'), findsOneWidget);
+      // The tile keeps its name and masks only the figure.
+      expect(find.text('Cash'), findsWidgets);
+      expect(find.text(maskedAmount), findsWidgets);
     });
 
     testWidgets('nothing below the balance moves when it is hidden', (
@@ -1059,5 +1215,42 @@ void main() {
 
     // One header for the day with two entries on it, not two.
     expect(find.byType(TxnRow), findsNWidgets(4));
+  });
+
+  testWidgets('an account tile is the same box however big its figure is', (
+    tester,
+  ) async {
+    phone(tester);
+    final store = await emptyStore();
+    final cash = store.accounts.first.id;
+    final salary = store.categoriesOf(TxKind.income).first.id;
+
+    await tester.pumpWidget(home(store));
+    await tester.pumpAndSettle();
+
+    Rect tile(String name) => tester.getRect(
+      find
+          .ancestor(of: find.text(name), matching: find.byType(Container))
+          .first,
+    );
+
+    final before = tile('Cash');
+
+    // A crore, which is far wider than the tile: the figure has to shrink
+    // into the box rather than the box grow around it.
+    store.addTxn(
+      Txn(
+        kind: TxKind.income,
+        amountMinor: 100000000000,
+        day: dayKey(today()),
+        categoryId: salary,
+        accountId: cash,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tile('Cash').size, before.size);
+    expect(tile('Bank').size, before.size);
+    expect(tile('Bank').left, tile('Cash').right + 8);
   });
 }

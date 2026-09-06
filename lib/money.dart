@@ -70,6 +70,27 @@ String rupeesWhole(int minor, {bool signed = false}) {
   return '$sign$rupee${groupIndian('${abs ~/ 100}')}';
 }
 
+/// `₹80K`, `₹1.2L`, `₹3.4Cr` — for an axis, where the magnitude is the point
+/// and the exact figure is noise.
+///
+/// Indian scale words, for the same reason [groupIndian] exists: a chart that
+/// says ₹1.2L beside a ledger that says ₹1,20,450 is one app, and one that
+/// says ₹120K is two.
+String compactRupees(int minor) {
+  final whole = minor.abs() ~/ 100;
+  // Tenths as an integer, so the file's no-doubles rule holds here too.
+  final (tenths, suffix) = switch (whole) {
+    >= 10000000 => (whole ~/ 1000000, 'Cr'),
+    >= 100000 => (whole ~/ 10000, 'L'),
+    >= 1000 => (whole ~/ 100, 'K'),
+    _ => (whole * 10, ''),
+  };
+  final text = tenths % 10 == 0
+      ? '${tenths ~/ 10}'
+      : '${tenths ~/ 10}.${tenths % 10}';
+  return '${minor < 0 ? '-' : ''}$rupee$text$suffix';
+}
+
 // ── Reading an amount back ──────────────────────────────────────────────────
 // The amount is typed on the platform's own numeric keyboard, so unlike the
 // rest of this file it does have to come in as a string once. It is parsed
