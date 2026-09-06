@@ -1566,7 +1566,21 @@ void main() {
 
     testWidgets('moving the month lets the held day go', (tester) async {
       phone(tester);
-      await aWeek(tester);
+      // Dated the 1st rather than through aWeek's week-anchored fixture: a
+      // week's Monday can fall in the previous month, which would leave that
+      // "empty" month not actually empty and the assertion below flaky.
+      final store = await emptyStore();
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: 45000,
+          day: dayKey(DateTime(today().year, today().month, 1)),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+        ),
+      );
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.bySemanticsLabel(RegExp('^Day 1\\b')));
       await tester.pumpAndSettle();
