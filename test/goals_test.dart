@@ -207,6 +207,120 @@ void main() {
     });
   });
 
+  group('pausing and archiving', () {
+    test('a paused goal takes no more money', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 20000, store.accounts.first.id);
+
+      store.setGoalState(g, GoalState.paused);
+      expect(store.roomToPutAside(g, store.accounts.first.id), 0);
+      expect(store.putAside(g, 10000, store.accounts.first.id), isNull);
+      expect(
+        store.statusOf(g).saved,
+        20000,
+        reason: 'what was already put aside stays put aside',
+      );
+    });
+
+    test('and hands back what it holds, because that is still yours', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 20000, store.accounts.first.id);
+      store.setGoalState(g, GoalState.paused);
+
+      expect(store.takeOut(g, 20000, store.accounts.first.id), isNotNull);
+      expect(store.statusOf(g).saved, 0);
+    });
+
+    test('resuming lets it take money again', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.setGoalState(g, GoalState.paused);
+      store.setGoalState(g, GoalState.active);
+
+      expect(store.putAside(g, 10000, store.accounts.first.id), isNotNull);
+    });
+
+    test('an archived goal is off the page, not out of the file', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 40000, store.accounts.first.id);
+
+      store.setGoalState(g, GoalState.archived);
+      expect(store.liveGoals, isEmpty);
+      expect(store.archivedGoals, hasLength(1));
+      expect(store.goals, hasLength(1), reason: 'nothing was deleted');
+      expect(
+        store.totalSetAside,
+        40000,
+        reason: 'the money is in the goals account either way',
+      );
+    });
+
+    test('the state rides the backup', () async {
+      final store = await emptyStore();
+      final paused = phone()..name = 'Paused';
+      final away = phone()..name = 'Away';
+      store.addGoal(paused);
+      store.addGoal(away);
+      store.setGoalState(paused, GoalState.paused);
+      store.setGoalState(away, GoalState.archived);
+
+      final back = PennyStore();
+      await back.load();
+      back.importJson(store.exportJson());
+
+      expect(back.goals.firstWhere((g) => g.name == 'Paused').paused, isTrue);
+      expect(back.goals.firstWhere((g) => g.name == 'Away').archived, isTrue);
+    });
+
+    test('a state this build does not know is just a goal', () {
+      final g = Goal.fromJson({'name': 'Odd', 'target': 100, 'state': 'zzz'});
+      expect(g.state, GoalState.active);
+    });
+  });
+
+  group('the goals account is not a pickable account', () {
+    test('it is off the list money is moved by hand', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 20000, store.accounts.first.id);
+      final vault = store.goalsAccount();
+
+      expect(store.liveAccounts, contains(vault));
+      expect(
+        store.pickableAccounts(),
+        isNot(contains(vault)),
+        reason: 'money gets in and out of it through a goal',
+      );
+    });
+
+    test('unless a sheet is already sitting on it', () async {
+      // The prefilled "Bought it" spend, and a contribution opened from the
+      // ledger: a picker that cannot show the current value changes it.
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 20000, store.accounts.first.id);
+      final vault = store.goalsAccount();
+
+      expect(store.pickableAccounts(vault.id), contains(vault));
+    });
+
+    test('archived accounts stay off it too', () async {
+      final store = await emptyStore();
+      final cash = store.accounts.first;
+      store.setAccountArchived(cash, true);
+      expect(store.pickableAccounts(), isNot(contains(cash)));
+    });
+  });
+
   group('milestones', () {
     test('one contribution to full celebrates once, not four times', () async {
       final store = await emptyStore();
@@ -486,17 +600,207 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Bought it'));
       await tester.pumpAndSettle();
 
-      expect(store.goals, isEmpty);
       // The entry sheet, carrying what it cost, what it was for, and the
       // account the money is actually sitting in.
       expect(find.widgetWithText(FilledButton, 'Add'), findsOneWidget);
       expect(find.text('1000'), findsOneWidget);
-      expect(find.text('Phone'), findsOneWidget);
+      expect(
+        find.text('Phone'),
+        findsNWidgets(2),
+        reason: 'the card still behind the sheet, and the note it prefilled',
+      );
       expect(
         find.text('Goals'),
         findsOneWidget,
         reason: 'the account pill on the sheet — the title is on the shell',
       );
+      expect(
+        store.goals,
+        hasLength(1),
+        reason: 'still open — nothing has been spent yet',
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pumpAndSettle();
+
+      expect(store.goals, isEmpty, reason: 'the spend closed it');
+      // By kind rather than by position: the transfer that funded it and the
+      // spend that closed it are both dated today, and the ledger sorts by day.
+      final spend = store.txns.singleWhere((t) => t.kind == TxKind.expense);
+      expect(spend.amountMinor, 100000);
+      expect(spend.accountId, store.goalsAccount().id);
+    });
+
+    testWidgets('the entry sheet will not offer the Goals account', (
+      tester,
+    ) async {
+      phoneView(tester);
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 100000, store.accounts.first.id);
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      // In through the sanctioned door: the spend "Bought it" prefills is on
+      // the Goals account, so the picker has to show it.
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Bought it'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Bought it'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Goals'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Goals'),
+        findsWidgets,
+        reason: 'the account the sheet is already on stays selectable',
+      );
+
+      // Off it, and it is gone: an ordinary expense cannot be entered against
+      // what the goals have spoken for.
+      await tester.tap(find.text('Cash').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cash'));
+      await tester.pumpAndSettle();
+      expect(find.text('Goals'), findsNothing);
+    });
+
+    testWidgets('backing out of that sheet keeps the goal', (tester) async {
+      // The goal used to close before the sheet opened, so cancelling left
+      // the money in Goals with nothing pointing at it.
+      phoneView(tester);
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 100000, store.accounts.first.id);
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Bought it'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Bought it'));
+      await tester.pumpAndSettle();
+
+      // Out of the entry sheet without saving.
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+
+      expect(store.goals, hasLength(1));
+      expect(store.statusOf(g).saved, 100000);
+    });
+
+    testWidgets('the goal editor has an icon but no colour', (tester) async {
+      // Goals are the brand's green, all of them: a palette index on a goal
+      // was decoration nobody was choosing between.
+      phoneView(tester);
+      final store = await emptyStore();
+      store.addGoal(phone());
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Edit goal'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('COLOUR'), findsNothing);
+      expect(find.text('ICON'), findsOneWidget);
+    });
+
+    testWidgets('pausing a goal shuts the door on Add', (tester) async {
+      phoneView(tester);
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 20000, store.accounts.first.id);
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Edit goal'));
+      await tester.pumpAndSettle();
+      final pause = find.widgetWithText(OutlinedButton, 'Pause');
+      await tester.ensureVisible(pause);
+      await tester.pumpAndSettle();
+      await tester.tap(pause);
+      await tester.pumpAndSettle();
+
+      expect(store.goals.single.paused, isTrue);
+      expect(find.text('PAUSED'), findsOneWidget);
+
+      // The sheet still opens — money can come back out — but nothing more
+      // goes in, and the sheet says why rather than leaving Add dead.
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      final add = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Add'),
+      );
+      expect(add.onPressed, isNull);
+      expect(find.textContaining('paused'), findsOneWidget);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Withdraw'),
+            )
+            .onPressed,
+        isNull,
+        reason: 'nothing typed yet — but the button is there',
+      );
+    });
+
+    testWidgets('archiving takes it off the page, and back again', (
+      tester,
+    ) async {
+      phoneView(tester);
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 20000, store.accounts.first.id);
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Edit goal'));
+      await tester.pumpAndSettle();
+      final archive = find.widgetWithText(OutlinedButton, 'Archive');
+      await tester.ensureVisible(archive);
+      await tester.pumpAndSettle();
+      await tester.tap(archive);
+      await tester.pumpAndSettle();
+
+      expect(store.goals.single.archived, isTrue);
+      expect(
+        find.text('Phone'),
+        findsNothing,
+        reason: 'off the page, but not out of the file',
+      );
+
+      // The door back in, on the empty state as well as under the list.
+      await tester.tap(find.text('1 archived goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      final restore = find.widgetWithText(OutlinedButton, 'Restore goal');
+      await tester.ensureVisible(restore);
+      await tester.pumpAndSettle();
+      await tester.tap(restore);
+      await tester.pumpAndSettle();
+
+      expect(store.goals.single.archived, isFalse);
+      expect(find.text('Nothing archived.'), findsOneWidget);
+
+      // Out of the sheet, and the goal is back on the page with the link gone.
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+      expect(find.text('Phone'), findsOneWidget);
+      expect(find.text('1 archived goal'), findsNothing);
     });
 
     testWidgets('hidden amounts are hidden here too', (tester) async {

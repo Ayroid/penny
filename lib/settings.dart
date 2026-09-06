@@ -299,6 +299,8 @@ Future<void> _showAccounts(BuildContext context, PennyStore store) {
               label: a.name,
               trailing: rupees(store.balanceOf(a.id)),
               archived: a.archived,
+              // Which are on the overview, without opening each one.
+              pinned: store.pinnedAccounts.contains(a),
               onTap: () => _editAccount(context, store, a),
             ),
         ],
@@ -340,14 +342,49 @@ Future<void> _editAccount(
             onChanged: (v) => setSheet(() => opening = v),
           ),
         ],
+        // Pin and archive are the two things that can happen to an account
+        // that is not editing it, so they share the row under Save. Pinning
+        // is capped: the card holds four tiles, and the button says so when
+        // it is full rather than failing quietly on the tap.
         footer: existing == null
             ? null
-            : TextButton(
-                onPressed: () {
-                  store.setAccountArchived(existing, !existing.archived);
-                  Navigator.pop(context);
-                },
-                child: Text(existing.archived ? 'Bring back' : 'Archive'),
+            : Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: store.canPin(existing)
+                          ? () {
+                              store.setAccountPinned(
+                                existing,
+                                !existing.pinned,
+                              );
+                              Navigator.pop(context);
+                            }
+                          : null,
+                      icon: Icon(
+                        existing.pinned ? LucideIcons.pinOff : LucideIcons.pin,
+                        size: 18,
+                      ),
+                      label: Text(
+                        existing.pinned
+                            ? 'Unpin'
+                            : store.canPin(existing)
+                            ? 'Pin to home'
+                            : '${PennyStore.maxPinned} pinned already',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        store.setAccountArchived(existing, !existing.archived);
+                        Navigator.pop(context);
+                      },
+                      child: Text(existing.archived ? 'Bring back' : 'Archive'),
+                    ),
+                  ),
+                ],
               ),
         onSave: name.text.trim().isEmpty
             ? null
@@ -604,7 +641,7 @@ Future<void> _editQuickEntry(
   var kind = existing?.kind ?? TxKind.expense;
   var categoryId =
       existing?.categoryId ?? store.categoriesOf(TxKind.expense).first.id;
-  var accountId = existing?.accountId ?? store.liveAccounts.first.id;
+  var accountId = existing?.accountId ?? store.pickableAccounts().first.id;
 
   return showModalBottomSheet<void>(
     context: context,
@@ -657,7 +694,7 @@ Future<void> _editQuickEntry(
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final a in store.liveAccounts)
+                for (final a in store.pickableAccounts(accountId))
                   PickChip(
                     label: a.name,
                     icon: iconFor(a.icon),
@@ -730,7 +767,7 @@ Future<void> _editRule(
   var freq = existing?.freq ?? Freq.monthly;
   var categoryId =
       existing?.categoryId ?? store.categoriesOf(TxKind.expense).first.id;
-  var accountId = existing?.accountId ?? store.liveAccounts.first.id;
+  var accountId = existing?.accountId ?? store.pickableAccounts().first.id;
   var start = existing != null ? parseDay(existing.startDay) : today();
 
   return showModalBottomSheet<void>(
@@ -794,7 +831,7 @@ Future<void> _editRule(
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final a in store.liveAccounts)
+                for (final a in store.pickableAccounts(accountId))
                   PickChip(
                     label: a.name,
                     icon: iconFor(a.icon),

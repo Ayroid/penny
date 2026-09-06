@@ -150,6 +150,7 @@ class EditableRow extends StatelessWidget {
     required this.onTap,
     this.trailing,
     this.archived = false,
+    this.pinned = false,
   });
 
   final IconData icon;
@@ -159,40 +160,62 @@ class EditableRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool archived;
 
+  /// On the overview's balance card. Takes the brand's soft green ground —
+  /// the same wash a funded goal's card takes — rather than a glyph beside the
+  /// name: which four are on the card is a property of the row, and the eye
+  /// finds four coloured bands in a list faster than it finds four small
+  /// icons among ten.
+  final bool pinned;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Opacity(
       // Archived dims rather than disappears — it is still yours, just retired.
       opacity: archived ? 0.45 : 1,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: colour.withValues(
-                    alpha: isDark(context) ? 0.15 : 0.12,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: pinned ? sproutSoftOf(context) : null,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: colour.withValues(
+                      alpha: isDark(context) ? 0.15 : 0.12,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  borderRadius: BorderRadius.circular(10),
+                  child: Icon(icon, size: 16, color: colour),
                 ),
-                child: Icon(icon, size: 16, color: colour),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.titleMedium,
+                const SizedBox(width: 12),
+                // One `Expanded` holding the name and its badge, rather than a
+                // `Flexible` and a `Spacer`: those two share the free space
+                // between them, so the amount stopped short of the edge by
+                // whatever the name did not use, and no two rows agreed on
+                // where the figures ended.
+                // Expanded, not a Flexible beside a Spacer: those two share
+                // the free space, so the figure stopped short of the edge by
+                // whatever the name did not use and no two rows lined up.
+                Expanded(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
-              ),
-              if (trailing != null)
-                Text(trailing!, style: mono(12, color: scheme.secondary)),
-            ],
+                if (trailing != null)
+                  Text(trailing!, style: mono(12, color: scheme.secondary)),
+              ],
+            ),
           ),
         ),
       ),
@@ -206,10 +229,10 @@ class EditSheet extends StatelessWidget {
     required this.title,
     required this.nameController,
     required this.nameHint,
-    required this.colour,
     required this.icon,
-    required this.onColour,
     required this.onIcon,
+    this.colour = defaultCatColor,
+    this.onColour,
     required this.onSave,
     this.extra = const [],
     this.footer,
@@ -220,7 +243,11 @@ class EditSheet extends StatelessWidget {
   final String nameHint;
   final int colour;
   final String icon;
-  final ValueChanged<int> onColour;
+
+  /// Null for a thing that has no colour of its own — a goal, which is drawn
+  /// in the brand's green. The swatches disappear with the callback rather
+  /// than behind a second flag saying the same thing.
+  final ValueChanged<int>? onColour;
   final ValueChanged<String> onIcon;
   final VoidCallback? onSave;
   final List<Widget> extra;
@@ -257,52 +284,60 @@ class EditSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           if (extra.isNotEmpty) ...[...extra, const SizedBox(height: 14)],
-          Text('COLOUR', style: Theme.of(context).textTheme.labelSmall),
-          const SizedBox(height: 8),
-          // Two rows deep and scrolling past that: twenty-one swatches wrapped
-          // in full cost a third of the sheet, and that height belongs to the
-          // icon grid under them.
-          SizedBox(
-            height: 68,
-            child: SingleChildScrollView(
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (var i = 0; i < catColors.length; i++)
-                    Semantics(
-                      button: true,
-                      selected: i == colour,
-                      label: catColors[i].name,
-                      excludeSemantics: true,
-                      child: GestureDetector(
-                        onTap: () => onColour(i),
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: catColors[i].value,
-                            shape: BoxShape.circle,
-                            border: i == colour
-                                ? Border.all(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                    width: 2.5,
-                                  )
-                                : null,
+          if (onColour != null) ...[
+            Text('COLOUR', style: Theme.of(context).textTheme.labelSmall),
+            const SizedBox(height: 8),
+            // Two rows deep and scrolling past that: twenty-one swatches wrapped
+            // in full cost a third of the sheet, and that height belongs to the
+            // icon grid under them.
+            SizedBox(
+              height: 68,
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < catColors.length; i++)
+                      Semantics(
+                        button: true,
+                        selected: i == colour,
+                        label: catColors[i].name,
+                        excludeSemantics: true,
+                        child: GestureDetector(
+                          onTap: () => onColour!(i),
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: catColors[i].value,
+                              shape: BoxShape.circle,
+                              border: i == colour
+                                  ? Border.all(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
+                                      width: 2.5,
+                                    )
+                                  : null,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
           Text('ICON', style: Theme.of(context).textTheme.labelSmall),
           const SizedBox(height: 8),
-          _IconPicker(selected: icon, colour: colour, onPick: onIcon),
+          _IconPicker(
+            selected: icon,
+            colour: onColour == null
+                ? sproutDeepOf(context)
+                : catColorAt(colour),
+            onPick: onIcon,
+          ),
         ],
       ),
     );
@@ -381,7 +416,7 @@ class _IconPicker extends StatefulWidget {
   });
 
   final String selected;
-  final int colour;
+  final Color colour;
   final ValueChanged<String> onPick;
 
   @override
@@ -454,18 +489,14 @@ class _IconPickerState extends State<_IconPicker> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: picked
-                                ? catColorAt(
-                                    widget.colour,
-                                  ).withValues(alpha: 0.22)
+                                ? widget.colour.withValues(alpha: 0.22)
                                 : scheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
                             iconFor(key),
                             size: 18,
-                            color: picked
-                                ? catColorAt(widget.colour)
-                                : scheme.secondary,
+                            color: picked ? widget.colour : scheme.secondary,
                           ),
                         ),
                       ),

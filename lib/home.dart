@@ -152,6 +152,12 @@ class _BalanceCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final total = store.totalBalance;
+    // What is on the card is pinned in settings, up to four. A person with one
+    // account gets no tiles at all: the row would say what the balance above
+    // it already said.
+    final tiles = store.liveAccounts.length > 1
+        ? store.pinnedAccounts
+        : const <Account>[];
 
     return TintCard(
       // The card carries its own padding: the landscape behind the numbers
@@ -171,15 +177,25 @@ class _BalanceCard extends StatelessWidget {
             child: IgnorePointer(
               // Sat on the card's bottom edge, which is where a horizon goes:
               // anchored anywhere else it reads as a sticker with a straight
-              // cut across it. Faded on the left so the tiles above keep a
-              // quiet corner to sit in.
+              // cut across it.
+              //
+              // Faded out at the top, not at the left. The left fade was for
+              // tiles that no longer need it — they carry their own ground —
+              // and it left a moon sitting behind "₹21,094 free", which is a
+              // figure read against whatever the sky happened to be doing
+              // there. The ramp ends above the tiles, so the art is only ever
+              // under the row that is opaque anyway.
               child: ShaderMask(
                 blendMode: BlendMode.dstIn,
                 shaderCallback: (rect) => const LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  // The art is 137 logical tall against a card of about 173,
+                  // so these are the text's own edges in the picture's
+                  // coordinates: clear through the balance and the line under
+                  // it, at full strength by the time the tiles start.
                   colors: [Colors.transparent, Colors.white],
-                  stops: [0.05, 0.45],
+                  stops: [0.42, 0.64],
                 ).createShader(rect),
                 child: Image.asset(
                   landingImage(),
@@ -199,7 +215,7 @@ class _BalanceCard extends StatelessWidget {
               16,
               16,
               16,
-              store.liveAccounts.length > 1 ? 12 : 88,
+              tiles.isEmpty ? 88 : 12,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,7 +254,7 @@ class _BalanceCard extends StatelessWidget {
                   strutStyle: monoStrut(11.5),
                   style: mono(11.5, color: scheme.secondary),
                 ),
-                if (store.liveAccounts.length > 1) ...[
+                if (tiles.isNotEmpty) ...[
                   const SizedBox(height: 32),
                   // Tiles rather than a wrap of pills: the name and the figure
                   // sit on two lines instead of one long one, so four accounts
@@ -253,7 +269,7 @@ class _BalanceCard extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          for (final a in store.liveAccounts)
+                          for (final a in tiles)
                             SizedBox(
                               width: width,
                               child: _AccountTile(

@@ -92,6 +92,25 @@ void main() {
       }
     });
 
+    test('the soft green wash carries ink, and swaps which one', () {
+      // A goal's percentage pill and the line under a finished goal's bar.
+      // The deep tone on cream; the accent at night, where the deep tone is
+      // 2.6:1 against the dark wash and would fail an 11px label outright.
+      expect(
+        contrastBetween(sproutDeep, sproutSoft),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastBetween(sproutDark, sproutSoftDark),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastBetween(sproutDeepDark, sproutSoftDark),
+        lessThan(4.5),
+        reason: 'the swap is measured, not a preference',
+      );
+    });
+
     test('the deep sprout carries white, which the accent cannot', () {
       for (final c in [sproutDeep, sproutDeepDark]) {
         expect(contrastBetween(Colors.white, c), greaterThanOrEqualTo(4.5));

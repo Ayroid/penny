@@ -228,6 +228,7 @@ class Account {
     this.openingBalanceMinor = 0,
     this.archived = false,
     this.forGoals = false,
+    this.pinned = false,
   }) : id = id ?? newId();
 
   final String id;
@@ -245,6 +246,10 @@ class Account {
   int openingBalanceMinor;
   bool archived;
 
+  /// On the overview's balance card. A phone fits four tiles across, so this
+  /// is a choice rather than a list — see [PennyStore.pinnedAccounts].
+  bool pinned;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -253,6 +258,7 @@ class Account {
     'opening': openingBalanceMinor,
     if (archived) 'archived': true,
     if (forGoals) 'forGoals': true,
+    if (pinned) 'pinned': true,
   };
 
   factory Account.fromJson(Map<String, dynamic> j) => Account(
@@ -263,6 +269,7 @@ class Account {
     openingBalanceMinor: (j['opening'] as num?)?.toInt() ?? 0,
     archived: j['archived'] as bool? ?? false,
     forGoals: j['forGoals'] as bool? ?? false,
+    pinned: j['pinned'] as bool? ?? false,
   );
 }
 
@@ -441,13 +448,29 @@ class Shortcut {
 /// any other. What a goal has in it is summed from those rows
 /// ([PennyStore.statusOf]), never stored here: two places for one number is
 /// two places to disagree.
+/// Where a goal is in its life.
+///
+/// One field with three states rather than two booleans: paused-and-archived
+/// is not a thing, and a pair of flags is a pair that can say it.
+enum GoalState {
+  active,
+  paused,
+  archived;
+
+  static GoalState parse(String? s) => GoalState.values.firstWhere(
+    (v) => v.name == s,
+    // A state this build does not know about is a goal, not a crash.
+    orElse: () => GoalState.active,
+  );
+}
+
 class Goal {
   Goal({
     String? id,
     required this.name,
     required this.targetMinor,
     this.icon = 'piggy-bank',
-    this.color = defaultCatColor,
+    this.state = GoalState.active,
   }) : id = id ?? newId();
 
   final String id;
@@ -456,15 +479,26 @@ class Goal {
   /// What the thing costs. Always positive — the editor will not save a zero.
   int targetMinor;
 
+  /// No colour of its own, unlike a category or an account: a goal is drawn in
+  /// the brand's green wherever it appears. Saved files from before that carry
+  /// a `color`, and it is read past — the palette index was never anything but
+  /// decoration on this object.
   String icon;
-  int color;
+
+  /// Paused takes no more money; archived is out of the way entirely. Neither
+  /// moves what is already set aside — that is in the goals account, and only
+  /// a transfer takes it out again.
+  GoalState state;
+
+  bool get paused => state == GoalState.paused;
+  bool get archived => state == GoalState.archived;
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'target': targetMinor,
     'icon': icon,
-    'color': color,
+    if (state != GoalState.active) 'state': state.name,
   };
 
   factory Goal.fromJson(Map<String, dynamic> j) => Goal(
@@ -472,7 +506,7 @@ class Goal {
     name: j['name'] as String? ?? 'Goal',
     targetMinor: ((j['target'] as num?)?.toInt() ?? 0).clamp(0, maxMinor),
     icon: j['icon'] as String? ?? 'piggy-bank',
-    color: (j['color'] as num?)?.toInt() ?? defaultCatColor,
+    state: GoalState.parse(j['state'] as String?),
   );
 }
 
@@ -837,6 +871,76 @@ class PennyStore extends ChangeNotifier {
       if (!a.archived) a,
   ];
 
+  /// How many account tiles the balance card holds. Four across a phone at
+  /// the width the tiles are drawn — a fifth wraps to a second row and pushes
+  /// the card past the height the rest of the overview is laid out around.
+  static const maxPinned = 4;
+
+  /// What the balance card shows.
+  ///
+  /// Nothing pinned means the app picks: the first four, which is what the
+  /// card did before pinning existed and what a fresh ledger with three seeded
+  /// accounts wants anyway. Pin one and the choice becomes yours entirely —
+  /// there is no "these four plus mine", because a card that adds accounts you
+  /// did not ask for is the thing pinning exists to stop.
+  List<Account> get pinnedAccounts {
+    final chosen = [
+      for (final a in liveAccounts)
+        if (a.pinned) a,
+    ];
+    return chosen.isEmpty
+        ? liveAccounts.take(maxPinned).toList()
+        : chosen.take(maxPinned).toList();
+  }
+
+  /// Whether [a] can go on the card right now: it is already there, or there
+  /// is room. The editor reads this to word its own button.
+  bool canPin(Account a) =>
+      a.pinned ||
+      [
+            for (final x in liveAccounts)
+              if (x.pinned) x,
+          ].length <
+          maxPinned;
+
+  /// Pins or unpins [a], up to [maxPinned]. Silently does nothing when the
+  /// card is full — the caller has [canPin] to ask with.
+  void setAccountPinned(Account a, bool value) {
+    if (value && !canPin(a)) return;
+    a.pinned = value;
+    _commit();
+  }
+
+  /// The accounts a person can pick by hand.
+  ///
+  /// Not the goals account: money gets into it by putting some aside and out
+  /// of it by withdrawing or by buying the thing, and every one of those routes
+  /// goes through a goal that then knows about it. An ordinary expense entered
+  /// against it spends what a goal has already spoken for, and the goals go on
+  /// claiming money the account no longer holds — which is why this is a
+  /// filter on the picker rather than a warning after the fact.
+  ///
+  /// [keep] is the account a sheet is already sitting on — the prefilled
+  /// "Bought it" spend, or a contribution opened from the ledger to edit. It
+  /// stays in the list, because a picker that cannot show the current value is
+  /// a picker that silently changes it.
+  List<Account> pickableAccounts([String? keep]) => [
+    for (final a in liveAccounts)
+      if (!a.forGoals || a.id == keep) a,
+  ];
+
+  /// The goals the page is about. Archived ones keep their money and their
+  /// transfers; they are simply not what anyone is saving for any more.
+  List<Goal> get liveGoals => [
+    for (final g in goals)
+      if (!g.archived) g,
+  ];
+
+  List<Goal> get archivedGoals => [
+    for (final g in goals)
+      if (g.archived) g,
+  ];
+
   // ── Balances ──────────────────────────────────────────────────────────────
 
   /// What is in [accountId] right now: its opening balance plus everything
@@ -992,6 +1096,7 @@ class PennyStore extends ChangeNotifier {
   /// and what the goal still needs. Zero or less means nothing can move —
   /// an empty account, or a goal already funded.
   int roomToPutAside(Goal g, String fromAccountId) {
+    if (g.state != GoalState.active) return 0;
     final balance = balanceOf(fromAccountId);
     final needed = statusOf(g).remaining;
     return balance < needed ? balance : needed;
@@ -1011,7 +1116,13 @@ class PennyStore extends ChangeNotifier {
   /// rest stays where it was.
   Txn? putAside(Goal g, int minor, String fromAccountId) {
     final needed = statusOf(g).remaining;
-    if (minor <= 0 || needed <= 0 || minor > balanceOf(fromAccountId)) {
+    // Guarded here rather than only on the button: this is where every caller
+    // routes through, and a paused goal that quietly accepts money from a
+    // second entry point is the bug the pause was added to prevent.
+    if (g.state != GoalState.active ||
+        minor <= 0 ||
+        needed <= 0 ||
+        minor > balanceOf(fromAccountId)) {
       return null;
     }
     final capped = minor < needed ? minor : needed;
@@ -1123,6 +1234,13 @@ class PennyStore extends ChangeNotifier {
 
   void setAccountArchived(Account a, bool value) {
     a.archived = value;
+    _commit();
+  }
+
+  /// Pause, archive or bring a goal back. Nothing moves: the money sits in the
+  /// goals account either way, and the ledger is untouched.
+  void setGoalState(Goal g, GoalState state) {
+    g.state = state;
     _commit();
   }
 

@@ -93,6 +93,15 @@ Color sproutDeepOf(BuildContext c) => isDark(c) ? sproutDeepDark : sproutDeep;
 /// whole reason the deep tone exists (9.1:1 in light, 5.3:1 in dark).
 const onSproutDeep = Colors.white;
 
+/// Ink on the soft green wash — a goal's percentage pill, and the line under a
+/// finished goal's bar.
+///
+/// The deep tone on cream, at 8.2:1. At night it inverts to the lit sprout:
+/// the deep tone against the dark wash is 2.6:1 and would fail an 11px label,
+/// while the accent clears 6.8. The same swap [onTint] makes, for the one
+/// wash that is the brand's own rather than a category's.
+Color onSproutSoft(BuildContext c) => isDark(c) ? sproutDark : sproutDeep;
+
 /// The coin. Expense fills and every chart bar — the design system reserves
 /// the accent so it never has to fill a chart.
 ///

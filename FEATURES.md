@@ -3,14 +3,18 @@
 Working checklist for what's built, what's broken, and what's next. Tick a box
 when it ships. Keep entries one line; the reasoning lives in the code comments.
 
-**Status:** 19 source files · 7,177 lines · 234 tests · 13 goldens · 4 runtime deps
+**Status:** 20 source files · 11,554 lines · 275 tests · 14 goldens · 4 runtime deps
 **Verified on:** Android device — runs, rupee and mono render, data survives a cold
-kill. That was *before* Goals and the bottom dock; those two are covered by tests
-and goldens and have not been on hardware yet
-**Last release:** none yet, but release builds are signed — `android/penny-release.jks`
-exists and `apksigner` reports `CN=Penny`, not the debug key
+kill. That was *before* Goals and the bottom dock, and before the deep-green
+chrome and the rebuilt Insights; all four are covered by tests and goldens and
+have not been on hardware yet
+**Last release:** 0.2.0, in `releases/0.2.0/` — the first build anyone can be
+handed. 0.1.0 was signed with the debug key, so nothing can update it; 0.2.0 is
+cut from `android/penny-release.jks` and `apksigner` reports `CN=Penny`. Nothing
+is published anywhere — a release here means three APKs on this disk
 **Current build:** arm64 **19.5 MB**, armeabi-v7a 16.7 MB, x86_64 21.0 MB
-(`--split-per-abi --obfuscate --split-debug-info`, the flags `tool/release.sh` uses)
+(`--split-per-abi --obfuscate --split-debug-info`, the flags `tool/release.sh`
+uses). Measured at 0.2.0; `assets/` is ~170 KB lighter since
 
 **On build size:** ship `--split-per-abi` or the `.aab`, never the plain APK.
 A fat `app-release.apk` carries all three ABIs and roughly doubles what anyone
@@ -21,7 +25,8 @@ downloads.
 | Mascot poses downscaled 1254 → 512 px, palette-quantised | **5.29 MB** |
 | Character sheet moved out of `assets/` into `art/` | ~1.4 MB |
 | `--obfuscate --split-debug-info` (in `tool/release.sh`) | still not isolated — the 19.5 MB above includes it, but no plain build was made alongside to subtract |
-| `lucide_icons_flutter` for ~120 icons | costs ~0.7 MB — see `lib/icons.dart` |
+| `lucide_icons_flutter` for ~250 icons | costs ~0.7 MB — see `lib/icons.dart` |
+| Landscape art requantised — one 588 KB landing page became four skies, and `mountains.png` 494 → 133 KB | ~170 KB, and four times the art |
 
 ---
 
@@ -50,16 +55,26 @@ downloads.
   twice a year. Zero-padded, so lexical order is chronological order.
 
 - **The clock is injected, in one place.** `lib/clock.dart` holds
-  `DateTime Function() clock = DateTime.now`; `today()` and `greeting()` are its
-  only callers, and production never reassigns it. Without it every golden that
-  renders a date drifts as the calendar moves and the suite starts failing on
-  its own. Wick had exactly this bug: 21 of its goldens were red and the
-  failures read as noise.
+  `DateTime Function() clock = DateTime.now`; `today()`, `greeting()` and
+  `landingImage()` are its only callers, and production never reassigns it.
+  Without it every golden that renders a date drifts as the calendar moves and
+  the suite starts failing on its own. Wick had exactly this bug: 21 of its
+  goldens were red and the failures read as noise.
 
-- **`onAccent` is computed, never assumed.** White on the sprout measures
-  **2.57:1** and fails a 15px/700 button label; navy is 5.43. Asserted per
-  theme in `palette_test.dart`, and pinned to the widget in `a11y_test.dart` so
-  the two cannot drift apart.
+- **Filled brand chrome is the deep sprout; the lit sprout stays the wash.**
+  White on `#34B863` measures **2.57:1** and fails a 15px/700 button label. The
+  first answer was to compute the ink and land on navy; the better one is to
+  darken the fill. Everything filled — the tab pill, the segmented pill, the
+  FAB, primary buttons, the Goals hero, the busiest heatmap cell — is
+  `sproutDeep`, carrying white at 9.1:1. Everything *washed* — tints, credit
+  figures, glyphs — stays the lit sprout, because a single dark accent turns
+  those grey. Dark mode needs its own deep tone: `#10412F` on the near-black
+  ground is 1.8:1 and the pill vanishes into it.
+
+- **`onAccent` is still computed — for the 21 category swatches.** They are
+  user-chosen and span the palette, so nothing may hardcode their ink.
+  Asserted per swatch in `palette_test.dart`, and pinned to the widget in
+  `a11y_test.dart` so the two cannot drift apart.
 
 - **The coin carries no text.** Income is the sprout and expense the coin, and
   green-vs-orange is the classic deuteranope confusion pair, so the two must be
@@ -70,7 +85,10 @@ downloads.
 - **A sprout bar cannot reach 3:1 on cream, and that is arithmetic.** Navy on
   the sprout needs luminance ≥ .2889; 3:1 against cream needs ≤ .2824. The
   window is empty by .0065. The button wins, and every bar carries its amount as
-  text. Asserted as a bounded exception so it cannot drift silently.
+  text and sits against a labelled axis. Asserted as a bounded exception so it
+  cannot drift silently. The heatmap used to be the second half of this
+  exception — accent against a wash of itself topped out near 1.90 — and is not
+  any more: the busy end of the ramp is drawn in the deep tone and measures 6:1.
 
 - **Colours are stored as palette indexes, icons as string keys.** So the
   palette can be retuned and the icon package upgraded without rewriting saved
@@ -115,8 +133,9 @@ downloads.
 
 - **Insights is a page you open, not a tab you swipe to.** It is where you go
   with a question; the ledger and the goals are where you go to do something.
-  It sits next to Settings in the overview's bar, which is also what made room
-  for a fourth destination without a fourth tab.
+  It sits next to Settings in the bar of every tab, which is also what made
+  room for a fourth destination without a fourth tab — and a question does not
+  wait until you have swiped back to the overview to be asked.
 
 - **No scrollbars.** Flutter draws one beside every scroll view on a desktop
   platform. Penny is a phone app whose longest list is an icon grid; the
@@ -190,6 +209,138 @@ downloads.
   spending. A month that ended down is ordinary. There is no disappointed
   mascot pose, deliberately.
 
+- **Insights reads a window, and the window is the page's state.** It opened
+  on today and could only look at today, which made it a summary rather than a
+  tool. It now holds an anchor: arrows step it, a horizontal fling steps it,
+  and tapping a bar jumps to the period that bar stands for. Switching Day /
+  Week / Month keeps the anchor, so stepping back three months and asking for
+  the week lands in that month rather than back at the present.
+
+- **The overview and Insights step through the same windows, from one widget.**
+  `PeriodNav` in `page_bar.dart` owns the label, the arrows and the
+  "not entirely in the future" rule. Two copies is how two pages end up
+  disagreeing about where a week starts.
+
+- **A share bar is the same fraction as the figure beside it.** Bars used to
+  be drawn against the largest row, which reads as a share of the whole and is
+  not one: the top category always filled the bar, whether it was 90% of the
+  month or 12%. They are drawn against the list's total now, so a long tail
+  looks like a long tail.
+
+- **An axis label is `₹1.2L`, not `₹1,20,450`.** `compactRupees` rounds to one
+  decimal in Indian scale words for the same reason `groupIndian` exists: a
+  chart that says ₹120K beside a ledger that says ₹1,20,450 is two apps. The
+  axis maximum is rounded up to a 1, 2 or 5 at its own magnitude, so the chart
+  tops out at ₹80K rather than at whatever the busiest week happened to be.
+
+- **A card holds its height and its boxes, whatever the figures are.** Three
+  layouts used to break on a big number: the balance wrapped to a second line,
+  an account pill grew and pushed its neighbour out of the row, and a ledger
+  row with a crore in it overflowed outright. All three are the same fix — a
+  stated box with `FittedBox` inside it, so a large figure shrinks rather than
+  pushing. The "set aside · free" line is drawn even when it is empty, so the
+  card is one height with goals and without.
+
+- **The card holds four account tiles, and which four is a choice.** A phone
+  fits four across at the width a tile is drawn; a fifth wraps and pushes the
+  card past the height the rest of the overview is laid out around. So accounts
+  are pinned to the card from their own editor in settings, capped at four, and
+  the button says "4 pinned already" when it is full rather than failing
+  quietly on the tap. Nothing pinned means the app picks the first four — which
+  is what the card did before, and what a fresh ledger with three seeded
+  accounts wants. Pin one and the choice is yours entirely: there is no "these
+  four plus mine", because a card that adds accounts you did not ask for is the
+  thing pinning exists to stop. In the list the four take the brand's soft
+  green ground — the same wash a funded goal's card takes — rather than a pin
+  glyph beside the name: being on the card is a property of the row, and four
+  coloured bands are found faster than four small icons among ten.
+
+- **The goals account is not a pickable account.** Money gets into it by
+  putting some aside, and out of it by withdrawing or by buying the thing —
+  every route goes through a goal, which then knows about it. An ordinary
+  expense entered against it spends what a goal has already spoken for, and the
+  goals go on claiming money the account no longer holds. So it is off the
+  entry sheet's picker, off the recurring-rule and quick-entry editors, and off
+  the goal contribution sheet's own chips: one `pickableAccounts` on the store,
+  which every picker in the app now reads. It stays visible on the sheet that
+  is already sitting on it — the prefilled "Bought it" spend, a contribution
+  opened from the ledger — because a picker that cannot show the current value
+  is a picker that silently changes it.
+
+- **The sky behind the balance moves with the clock, like the greeting.** Four
+  cuts of the same range — sunrise, full sun, dusk, a moon — chosen by
+  `landingImage()` on the same hour boundaries `greeting()` reads, and pinned
+  to those boundaries in `palette_test.dart` so a card cannot say good evening
+  under a midday sun. It sits on the card's bottom edge, because that is where
+  a horizon goes, and it runs *behind* the account tiles rather than stopping
+  at them — which is why a tile's ground is its own colour darkened, not a pale
+  wash a mountain shows through. It is faded out at the *top*, not at the left
+  as it first was: the left fade was for tiles that carry their own ground now,
+  and it left a moon sitting behind "₹21,094 free" — a figure read against
+  whatever the sky happened to be doing there, which no contrast rule can
+  cover. The art is 137 logical tall against a card of about 173, so the ramp
+  runs from 0.42 to 0.64 of the picture: clear through the balance and the line
+  under it, at full strength by the time the tiles start. The cost is the moon
+  and the sun, which sit high in the drawing; moving them down the 960×410
+  canvas would bring them back.
+
+- **In a `Stack`, the one painted last is the one a tap lands on.** The eye was
+  pinned to the balance card's corner and put in the stack before the balance
+  line, which runs under that corner: it was drawn correctly, looked right in
+  every golden, and could not be tapped at all.
+
+- **The eye lives on the overview, and only there.** It was listed as a gap —
+  masked on the ledger means swiping back to unmask — and it is not one. The
+  switch belongs to the balance card it hides, the way a light switch belongs
+  to the room. Insights and Settings moved into every tab's bar because they
+  are destinations; a toggle is not.
+
+- **Insights and the overview keep separate windows.** Both step through
+  periods with the same `PeriodNav`, and each holds its own anchor on purpose:
+  Insights is where you go to read back through past months, while the overview
+  is where this month — or whichever month you left it on — is being kept. One
+  shared anchor means reading March in Insights quietly moves the page you
+  come back to.
+
+- **A goal has no colour of its own.** Categories and accounts do, because a
+  ledger row has to be told from the one above it at a glance. A goal is a
+  thing the whole app is pulling towards, so it is drawn in the brand's green
+  wherever it appears: a filled deep-sprout tile with a white glyph, the same
+  pairing as the FAB and the tab pill. The editor drops the swatches with it —
+  a picker nobody was choosing between. `EditSheet` hides that block when it is
+  handed no `onColour`, rather than growing a second flag that says the same
+  thing, and `Goal.color` is gone from the model; an older file's `color` is
+  simply read past.
+
+- **The soft green wash swaps its ink between themes.** A goal's percentage
+  pill and the line under a finished goal's bar are the deep tone on cream
+  (8.2:1) and the lit sprout at night — where the deep tone measures 2.6:1
+  against the dark wash and would fail an 11px label. `onSproutSoft` is the one
+  place that swap is made, the same inversion `onTint` makes for a category's
+  own wash, and `palette_test.dart` asserts both sides of it.
+
+- **A goal is active, paused or archived — one field, three states.** Pausing
+  stops money going in and says so on the card; archiving takes it off the page
+  entirely. Neither moves a paise: what is set aside is in the goals account,
+  and only a transfer takes it out again. Stored as one `GoalState` rather than
+  two booleans, because paused-and-archived is not a thing and a pair of flags
+  is a pair that can say it. The pause is enforced in `putAside`, not only on
+  the button — one guard where every caller routes through.
+
+- **The archive is a door, not a fourth filter chip.** `Segmented` says three
+  options is where a pill stops being a pill, and the archive is not a view of
+  the same list: it is a room you go into. A row under the add button opens the
+  sheet kit's own list, dimmed exactly as archived accounts and categories are
+  in settings. It stays open when it empties rather than dismissing itself: the
+  editor opens over it, and a pop racing that one pops whichever route happens
+  to be on top.
+
+- **Nothing is decided until the ledger says something happened.** "Bought it"
+  used to close the goal and *then* open the entry sheet, on the grounds that
+  losing a goal is harmless next to losing money. Backing out of that sheet
+  left the money sitting in Goals with nothing pointing at it and a goal to
+  re-type from memory. The goal now closes only once the row is actually in.
+
 - **The mask is a fixed six dots.** One dot per digit would give away the order
   of magnitude, which is most of what hiding the balance was for. Every place
   that swaps between digits and the mask carries `forceStrutHeight`, because
@@ -228,7 +379,8 @@ downloads.
 - [x] Android 12+ splash (`values-v31`), cream in both themes
 
 ### Shell
-- [x] Three swipeable pages under a floating tab pill, Insights opened from the bar
+- [x] Three swipeable pages under a floating tab pill
+- [x] Insights and Settings in every tab's bar, opened from wherever you are
 - [x] Add button at the bottom right, on the pill's line, one per page
 - [x] Tab pill tracks the swipe fraction, not just the settled page
 - [x] Tab pill sits above the system gesture strip, not inside it
@@ -236,7 +388,11 @@ downloads.
 - [x] Recurring rules catch up on launch and on resume
 
 ### Overview
-- [x] Total balance + per-account chips
+- [x] Total balance, scaled down rather than wrapped when it is large
+- [x] Up to four pinned account tiles across the card's bottom edge
+- [x] Pinned from the account's own editor, capped; pinned rows take the
+      brand's soft green ground in the list
+- [x] A landscape behind the balance, at the hour it actually is
 - [x] Eye toggle — masks every amount in the app, persisted
 - [x] Quick entries, held out of the add button — drag onto one and let go, or
       tap it once the row is up; adds dated today
@@ -255,8 +411,14 @@ downloads.
 - [x] Taking it back out picks a destination, and is capped at what is in there
 - [x] Progress summed from the ledger, so deleting a row shrinks the goal
 - [x] Milestones at 25/50/75/100% — `showPennyMoment`, claimed once ever
-- [x] "Bought it" closes the goal and spends out of Goals, prefilled
+- [x] "Bought it" spends out of Goals, prefilled — and closes the goal only
+      once that row is saved, so backing out costs nothing
+- [x] Goal cards in the brand's green — filled tile, white glyph, no palette
+- [x] Pause a goal — it keeps what it holds and takes nothing more
+- [x] Archive a goal — off the page, still in the file, one tap back
+- [x] Archived goals behind a row under the add button, restored from the editor
 - [x] Set aside and free, under the balance on the overview
+- [x] Nothing else can spend the Goals account — it is off every picker
 - [x] Goals ride the backup like everything else
 
 ### Ledger
@@ -266,10 +428,16 @@ downloads.
 - [x] All / Debit / Credit filter
 
 ### Insights
-- [x] Opened from the overview's bar, with a back arrow rather than a tab
-- [x] Credit-and-debit trend, 6 periods, with a colour key
-- [x] Category breakdown with share bars, largest first
-- [x] "₹X more than last month", silent when there is nothing to compare
+- [x] Opened from any tab's bar, with a back arrow rather than a tab
+- [x] Day / Week / Month, and the window it reads is steppable — arrows, a
+      horizontal swipe, or a tap on any bar in the chart
+- [x] Credit-and-debit trend, 6 periods (7 days), against a labelled axis
+- [x] Axis in Indian scale words, rounded up to a 1, 2 or 5
+- [x] Both figures at one size — what came in and what went out, one question
+- [x] A comparison card that reports both directions against the period before
+- [x] A breakdown per side of the ledger, top five and a "See all"
+- [x] Share bars are a fraction of the list, not of the largest row
+- [x] Tap a category, or the footer, for that period's transactions in a sheet
 
 ### Add & edit
 - [x] Platform numeric keyboard, autofocused, decimal input formatter
@@ -297,6 +465,7 @@ downloads.
 - [x] Integer paise throughout
 - [x] Indian lakh/crore grouping (`₹1,20,450.00`)
 - [x] `parseRupees` — commas, partial decimals, truncation, overflow clamping
+- [x] `compactRupees` — `₹80K`, `₹1.2L`, `₹3.4Cr` for an axis, still integer paise
 
 ### First run
 - [x] Three onboarding pages
@@ -314,28 +483,14 @@ downloads.
 
 ## Known gaps — fix before new features
 
-- **The eye lives only on the overview.** Hiding now covers every screen, but
-  the one switch that turns it off is on the first tab — masked on the ledger
-  means swiping back to unmask. A second eye in the ledger's bar, or a row in
-  settings, whichever gets asked for first.
-- **Cancelling the entry sheet after "Bought it" loses the goal.** The goal
-  closes before the sheet opens, so backing out leaves the money sitting in
-  Goals with nothing pointing at it. Recoverable by hand, but it is a re-typed
-  goal.
-- **Insights is only reachable from the overview.** From the ledger or goals
-  you swipe back first. Same shape as the eye above, and the same fix if it
-  ever grates: put it in the bar of every tab page.
-- **A goal cannot be paused or archived**, only deleted. Same shape as rules,
-  and the same question: does anything actually want it?
 - **A contribution is always dated today.** The sheet has no date picker — the
   row it writes is an ordinary transfer, so the fix is to open it in the ledger
   and change the date there. Fine until someone catches up a month of saving in
   one sitting.
-- **Nothing stops a goal being spent out of Goals by accident.** The account is
-  ordinary, so an expense can be entered against it like any other, and the
-  goals then quietly claim more than the account holds. `statusOf` floors at
-  zero rather than going negative; a warning on the page would be the honest
-  fix if it ever happens.
+- **A hand-edited backup can still put an expense on the Goals account.** The
+  pickers no longer offer it, so nothing in the app can do it by accident, but
+  an import reads what it is given. `statusOf` floors at zero rather than going
+  negative, which is the safe way to be wrong.
 
 ## Backlog
 
@@ -392,7 +547,7 @@ downloads.
 
 ```sh
 flutter run                       # debug
-flutter test                      # 234 unit, widget and golden tests
+flutter test                      # 251 unit, widget and golden tests
 flutter test --update-goldens     # only when a pixel change is deliberate
 flutter analyze
 python3 tool/make_icon.py         # after changing anything in art/

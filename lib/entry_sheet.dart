@@ -87,7 +87,7 @@ class _EntrySheetState extends State<_EntrySheet> {
   late String _accountId =
       widget.existing?.accountId ??
       widget.initialAccountId ??
-      widget.store.liveAccounts.first.id;
+      widget.store.pickableAccounts().first.id;
   late String? _toAccountId = widget.existing?.toAccountId;
   late final _note = TextEditingController(
     text: widget.existing?.note ?? widget.initialNote,
@@ -279,10 +279,12 @@ class _EntrySheetState extends State<_EntrySheet> {
                       _kind = k;
                       _categoryId = null;
                       if (k == TxKind.transfer) {
-                        _toAccountId ??= widget.store.liveAccounts
+                        _toAccountId ??= widget.store
+                            .pickableAccounts()
                             .firstWhere(
                               (a) => a.id != _accountId,
-                              orElse: () => widget.store.liveAccounts.first,
+                              orElse: () =>
+                                  widget.store.pickableAccounts().first,
                             )
                             .id;
                       }
@@ -516,7 +518,9 @@ class _EntrySheetState extends State<_EntrySheet> {
       builder: (context) => _PickerSheet(
         title: 'Account',
         items: [
-          for (final a in widget.store.liveAccounts)
+          // The goals account is not on this list unless the sheet is already
+          // on it: what is set aside moves through a goal, not through here.
+          for (final a in widget.store.pickableAccounts(current))
             if (a.id != exclude)
               (
                 id: a.id,

@@ -9,6 +9,7 @@ import 'package:penny/main.dart';
 import 'package:penny/money.dart';
 import 'package:penny/onboarding.dart';
 import 'package:penny/page_bar.dart';
+import 'package:penny/sheets.dart';
 import 'package:penny/settings.dart';
 import 'package:penny/store.dart';
 import 'package:penny/txn_row.dart';
@@ -1116,6 +1117,176 @@ void main() {
       expect(store.rules, hasLength(1), reason: 'edited, not replaced');
       expect(store.rules.single.amountMinor, 1500000);
       expect(store.rules.single.note, 'Rent');
+    });
+  });
+
+  group('pinning accounts to the card', () {
+    test('nothing pinned means the app picks the first four', () async {
+      final store = await emptyStore();
+      for (final name in ['Card', 'Savings']) {
+        store.addAccount(Account(name: name));
+      }
+      expect(store.liveAccounts, hasLength(5));
+      expect(store.pinnedAccounts, hasLength(4));
+      expect(store.pinnedAccounts, store.liveAccounts.take(4));
+    });
+
+    test('one pin replaces the lot — the card is yours after that', () async {
+      final store = await emptyStore();
+      final bank = store.accounts[1];
+      store.setAccountPinned(bank, true);
+      expect(store.pinnedAccounts, [bank]);
+    });
+
+    test('four is the cap, and the fifth is refused', () async {
+      final store = await emptyStore();
+      for (final name in ['Card', 'Savings']) {
+        store.addAccount(Account(name: name));
+      }
+      for (final a in store.liveAccounts.take(4)) {
+        store.setAccountPinned(a, true);
+      }
+      final fifth = store.liveAccounts[4];
+
+      expect(store.canPin(fifth), isFalse);
+      store.setAccountPinned(fifth, true);
+      expect(fifth.pinned, isFalse, reason: 'refused, not silently swapped');
+      expect(store.pinnedAccounts, hasLength(4));
+
+      // Room again once something comes off.
+      store.setAccountPinned(store.liveAccounts.first, false);
+      expect(store.canPin(fifth), isTrue);
+      store.setAccountPinned(fifth, true);
+      expect(store.pinnedAccounts, contains(fifth));
+    });
+
+    test('an archived account leaves the card', () async {
+      final store = await emptyStore();
+      final bank = store.accounts[1];
+      store.setAccountPinned(bank, true);
+      store.setAccountArchived(bank, true);
+      expect(store.pinnedAccounts, isNot(contains(bank)));
+    });
+
+    test('the pin rides the backup', () async {
+      final store = await emptyStore();
+      store.setAccountPinned(store.accounts[1], true);
+
+      final back = PennyStore();
+      await back.load();
+      back.importJson(store.exportJson());
+      expect(back.pinnedAccounts.single.name, store.accounts[1].name);
+    });
+
+    testWidgets('the card shows what is pinned, and only that', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      final cash = store.accounts.first;
+      cash.openingBalanceMinor = 50000;
+      store.setAccountPinned(cash, true);
+
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+
+      expect(find.text(cash.name), findsOneWidget);
+      for (final a in store.liveAccounts.skip(1)) {
+        expect(
+          find.text(a.name),
+          findsNothing,
+          reason: '${a.name} is not pinned',
+        );
+      }
+    });
+  });
+
+  group('the shared editor', () {
+    testWidgets('an account is pinned from its own editor', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(wrap(SettingsScreen(store: store)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Accounts'));
+      await tester.pumpAndSettle();
+
+      final bank = store.accounts[1];
+      await tester.tap(find.text(bank.name));
+      await tester.pumpAndSettle();
+      final pin = find.widgetWithText(OutlinedButton, 'Pin to home');
+      await tester.ensureVisible(pin);
+      await tester.pumpAndSettle();
+      await tester.tap(pin);
+      await tester.pumpAndSettle();
+
+      expect(bank.pinned, isTrue);
+      expect(store.pinnedAccounts, [bank]);
+
+      // And the row says so without being opened again: the brand's soft
+      // green ground, the same wash a funded goal's card takes.
+      final ground = tester.widget<Ink>(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text(bank.name),
+            matching: find.byType(EditableRow),
+          ),
+          matching: find.byType(Ink),
+        ),
+      );
+      expect(
+        (ground.decoration as BoxDecoration).color,
+        sproutSoft,
+        reason: 'a pinned row is grounded, not badged',
+      );
+    });
+
+    testWidgets('every figure in a list ends on the same edge', (tester) async {
+      // A `Flexible` name beside a `Spacer` shares the free space with it, so
+      // the amount stopped short of the edge by whatever the name did not use
+      // and no two rows lined up. Measured rather than eyeballed: this is a
+      // layout that looks nearly right when it is wrong.
+      phone(tester);
+      final store = await emptyStore();
+      store.accounts.first.openingBalanceMinor = 1863496;
+      await tester.pumpWidget(wrap(SettingsScreen(store: store)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Accounts'));
+      await tester.pumpAndSettle();
+
+      final rights = <double>[];
+      for (final a in store.accounts) {
+        final row = find.ancestor(
+          of: find.text(a.name),
+          matching: find.byType(EditableRow),
+        );
+        final figure = find.descendant(
+          of: row,
+          matching: find.text(rupees(store.balanceOf(a.id))),
+        );
+        rights.add(tester.getRect(figure).right);
+        // The row's own padding is all that is left to the right of it.
+        expect(
+          tester.getRect(row).right - tester.getRect(figure).right,
+          closeTo(8, 0.5),
+          reason: '${a.name} does not reach the edge',
+        );
+      }
+      expect(rights.toSet(), hasLength(1), reason: 'and they agree');
+    });
+
+    testWidgets('a category still picks its own colour', (tester) async {
+      // The swatches are hidden for goals, which have no colour of their own.
+      // Everything else still chooses one, and this is what says so.
+      phone(tester);
+      final store = await emptyStore();
+      await tester.pumpWidget(wrap(SettingsScreen(store: store)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Categories'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(store.categories.first.name));
+      await tester.pumpAndSettle();
+
+      expect(find.text('COLOUR'), findsOneWidget);
+      expect(find.text('ICON'), findsOneWidget);
     });
   });
 
