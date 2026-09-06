@@ -29,8 +29,16 @@ class _HomePageState extends State<HomePage> {
   /// place you were in.
   DateTime _anchor = today();
 
-  void _step(int by) =>
-      setState(() => _anchor = shiftAnchor(_period, _anchor, by));
+  /// The day tapped in the grid, or null for the whole period. Cleared when
+  /// the period or the anchor moves: a day picked in March has nothing to say
+  /// about April, and a list showing rows from outside the period on screen
+  /// is worse than losing the selection.
+  String? _picked;
+
+  void _step(int by) => setState(() {
+    _anchor = shiftAnchor(_period, _anchor, by);
+    _picked = null;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -39,13 +47,18 @@ class _HomePageState extends State<HomePage> {
     final range = rangeFor(_period, _anchor);
     final totals = totalsIn(store.txns, range);
     final rows = within(store.txns, range);
+    // The whole period's last few, or everything that happened on the day
+    // tapped in the grid — all of it, since a day is a short list by nature.
+    final shown = _picked == null
+        ? rows.take(8).toList()
+        : rows.where((t) => t.day == _picked).toList();
 
     // The recent list carries the same day headers the ledger does, built up
     // front rather than inside the children list: a day changes on a row, and
     // spotting that mid-list is what an index-fiddling loop gets wrong.
     final recent = <Widget>[];
     String? lastDay;
-    for (final t in rows.take(8)) {
+    for (final t in shown) {
       if (t.day != lastDay) {
         lastDay = t.day;
         recent.add(
@@ -98,7 +111,10 @@ class _HomePageState extends State<HomePage> {
             Segmented<Period>(
               options: {for (final p in Period.values) p: p.label},
               value: _period,
-              onChanged: (p) => setState(() => _period = p),
+              onChanged: (p) => setState(() {
+                _period = p;
+                _picked = null;
+              }),
             ),
             const SizedBox(height: 12),
 
@@ -112,20 +128,26 @@ class _HomePageState extends State<HomePage> {
             // you nothing the figures above have not.
             if (_period != Period.day) ...[
               const SizedBox(height: 12),
-              _SpendHeatmap(
+              _DayGrid(
                 spend: spendByDay(store.txns, range),
+                net: netByDay(store.txns, range),
                 hidden: store.hideAmounts,
                 range: range,
+                picked: _picked,
+                onPick: (day) =>
+                    setState(() => _picked = _picked == day ? null : day),
               ),
             ],
 
             const SizedBox(height: 24),
-            if (rows.isEmpty)
+            if (shown.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: PennyMessage(
                   pose: Penny.rest,
-                  headline: 'Nothing this ${_period.label.toLowerCase()}',
+                  headline: _picked == null
+                      ? 'Nothing this ${_period.label.toLowerCase()}'
+                      : 'Nothing on ${dayHeader(_picked!).toLowerCase()}',
                   body: 'A quiet stretch. Nothing moved in or out.',
                   actionLabel: 'Add a transaction',
                   onAction: () => showEntrySheet(context, store),
@@ -211,12 +233,7 @@ class _BalanceCard extends StatelessWidget {
             // range runs behind it; without them the strip along the bottom
             // is kept clear — the range is the card's ground line, not
             // something to write over.
-            padding: EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              tiles.isEmpty ? 88 : 12,
-            ),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, tiles.isEmpty ? 88 : 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -565,29 +582,59 @@ class _MeterDivider extends StatelessWidget {
       Container(width: 1, height: 30, color: colour);
 }
 
-/// A month of days, each shaded by what was spent on it.
+/// A month of days, shaded by what was spent, with each day's net written in
+/// on request.
 ///
-/// Wick's contribution grid, re-pointed at money. The alpha runs between the
-/// unlit-cell wash and the accent at full strength, so a heavy day is solid and
-/// a light one barely there.
-class _SpendHeatmap extends StatelessWidget {
-  const _SpendHeatmap({
+/// The shading is Wick's contribution grid re-pointed at money — an alpha
+/// between the unlit-cell wash and the accent, so a heavy day is solid and a
+/// light one barely there. It answers "how much" and never "which way", which
+/// is the question a day with a salary in it is actually asking; the figures
+/// answer it, in the same cells, and cost a tap.
+///
+/// One grid rather than two views of one: the toggle used to swap the shading
+/// out for a flat card of figures, which made a tap look like a change of
+/// subject. The colour stays put and the numbers come and go on top of it.
+///
+/// Tapping a day sends it up to the page, which shows that day's rows below
+/// instead of the period's last few.
+class _DayGrid extends StatefulWidget {
+  const _DayGrid({
     required this.spend,
+    required this.net,
     required this.range,
     required this.hidden,
+    required this.picked,
+    required this.onPick,
   });
 
   final Map<String, int> spend;
+  final Map<String, int> net;
 
   /// The days to draw. A month lays out as a calendar with leading blanks; a
   /// week is the same grid with exactly seven cells and none.
   final Range range;
   final bool hidden;
+  final String? picked;
+  final ValueChanged<String> onPick;
+
+  @override
+  State<_DayGrid> createState() => _DayGridState();
+}
+
+class _DayGridState extends State<_DayGrid> {
+  /// Shading alone is the default: it is the picture you can read without
+  /// reading, and the figures are what you turn to when it has caught your
+  /// eye. Not persisted — this is a glance, not a setting.
+  bool _figures = false;
 
   @override
   Widget build(BuildContext context) {
+    final spend = widget.spend;
+    final range = widget.range;
+    final hidden = widget.hidden;
     final scheme = Theme.of(context).colorScheme;
     final from = parseDay(range.from);
+    final todayKey = dayKey(today());
 
     // Walked a day at a time rather than by subtracting dates: a Duration is
     // 24 real hours and lands on the wrong calendar day across a DST change.
@@ -610,24 +657,45 @@ class _SpendHeatmap extends StatelessWidget {
         children: [
           Row(
             children: [
+              // The shading is spend either way — the figures are the net on
+              // top of it, which is what the button's tooltip says.
               Text(
                 'SPEND BY DAY',
                 style: Theme.of(context).textTheme.labelSmall,
               ),
-              const Spacer(),
-              if (peak > 0)
-                // Masked rather than removed, so the row keeps its shape
-                // either way. Flexible because a large peak plus the label is
-                // wider than a narrow phone.
-                Flexible(
-                  child: Text(
-                    'busiest ${hidden ? maskedAmount : rupeesWhole(peak)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    strutStyle: monoStrut(11),
-                    style: mono(11, color: scheme.secondary),
-                  ),
-                ),
+              // The heaviest day of the month: a fact about the month rather
+              // than about the way the grid is drawn, so it stays put when the
+              // figures come and go.
+              //
+              // `Expanded` and no `Spacer`: the two would share the free space
+              // between them and leave this half of it, which is how the
+              // figure came to read "busiest ₹2…" with room to spare beside
+              // it. Right-aligned inside, so it sits against the switch.
+              Expanded(
+                child: peak == 0
+                    ? const SizedBox.shrink()
+                    : Text(
+                        // Compact, like the chart's axis: the switch beside
+                        // it takes the width that spelled the figure out in
+                        // full. Masked rather than removed, so the row keeps
+                        // its shape either way.
+                        'busiest '
+                        '${hidden ? maskedAmount : compactRupees(peak)}',
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        strutStyle: monoStrut(11),
+                        style: mono(11, color: scheme.secondary),
+                      ),
+              ),
+              const SizedBox(width: 6),
+              RoundIconButton(
+                // The state it goes to, not the one it is in.
+                icon: _figures ? LucideIcons.grid2x2 : LucideIcons.hash,
+                tooltip: _figures ? 'Hide the figures' : 'Show each day\'s net',
+                size: 30,
+                onPressed: () => setState(() => _figures = !_figures),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -654,8 +722,13 @@ class _SpendHeatmap extends StatelessWidget {
                 _Cell(
                   day: d.day,
                   amount: spend[dayKey(d)] ?? 0,
+                  net: widget.net[dayKey(d)],
                   peak: peak,
                   hidden: hidden,
+                  figures: _figures,
+                  isToday: dayKey(d) == todayKey,
+                  picked: dayKey(d) == widget.picked,
+                  onTap: () => widget.onPick(dayKey(d)),
                 ),
             ],
           ),
@@ -665,18 +738,33 @@ class _SpendHeatmap extends StatelessWidget {
   }
 }
 
+/// One day of the calendar: shaded by what it cost, and — when the figures are
+/// on — carrying what it came to.
+///
+/// [net] is null on a day nothing happened, which is not the same as a day
+/// that came out even: one is blank, the other says zero.
 class _Cell extends StatelessWidget {
   const _Cell({
     required this.day,
     required this.amount,
+    required this.net,
     required this.peak,
     required this.hidden,
+    required this.figures,
+    required this.isToday,
+    required this.picked,
+    required this.onTap,
   });
 
   final int day;
   final int amount;
+  final int? net;
   final int peak;
   final bool hidden;
+  final bool figures;
+  final bool isToday;
+  final bool picked;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -692,17 +780,121 @@ class _Cell extends StatelessWidget {
         ? cellEmpty(context)
         : Color.lerp(cellEmpty(context), lit, t)!;
 
+    // Everything written in the cell reads against whatever that came out as.
+    // The ramp runs from a pale wash to a solid green, so neither ink works at
+    // both ends and the choice is measured per cell — the same rule `onAccent`
+    // follows.
+    //
+    // Black rather than the brand's navy, which is the one place in the app
+    // that swap is made: navy loses the middle of the ramp — 3.8:1 around the
+    // two-thirds mark, where it is too dark for the light end's contrast and
+    // too light for the dark end's — and a figure written in the cell is the
+    // reading, not furniture. The neutral pair clears 4.7 at every step, in
+    // both themes. `palette_test` walks the ramp and asserts both halves of
+    // that, so the swap stays a decision.
+    //
+    // This is also why the figure is not green-and-red: the ink is whatever
+    // survives the ground it lands on, so the day's direction is carried by
+    // the minus sign instead of by hue.
+    //
+    // Measured against what the cell is *painted*, not against `colour`: the
+    // wash and everything on the ramp below solid are the accent at an alpha,
+    // and a translucent green measures as the full-strength one it was mixed
+    // from. That is how an unlit cell at night — a whisper of green on black —
+    // came out asking for dark ink. The card and the page go under it first.
+    final painted = Color.alphaBlend(
+      colour,
+      Color.alphaBlend(
+        cardTint(context),
+        Theme.of(context).scaffoldBackgroundColor,
+      ),
+    );
+    final ink =
+        contrastBetween(Colors.black, painted) >=
+            contrastBetween(Colors.white, painted)
+        ? Colors.black
+        : Colors.white;
+    // The date and today's ring are furniture; the figure is the reading, and
+    // keeps the ink at full strength.
+    final soft = ink.withValues(alpha: ink == Colors.black ? 0.7 : 0.85);
+
     return Semantics(
-      label: amount == 0
-          ? 'Day $day, nothing spent'
-          : 'Day $day, ${rupees(amount)}',
+      button: true,
+      selected: picked,
+      label: [
+        'Day $day',
+        if (isToday) 'today',
+        amount == 0 ? 'nothing spent' : rupees(amount),
+        // Signed, so the direction reaches a reader who is not being shown
+        // the minus sign in the cell — or any of it, when hidden.
+        if (net != null) 'net ${rupees(net!, signed: true)}',
+      ].join(', '),
       excludeSemantics: true,
       child: Tooltip(
         message: amount == 0 || hidden ? '$day' : '$day · ${rupees(amount)}',
-        child: Container(
-          decoration: BoxDecoration(
-            color: colour,
-            borderRadius: BorderRadius.circular(5),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedScale(
+            scale: picked ? 1.06 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              decoration: BoxDecoration(
+                color: colour,
+                borderRadius: BorderRadius.circular(5),
+                // Today is ringed in the cell's own ink so it survives both ends
+                // of the ramp; the picked day gets the same ring at full weight.
+                // A transparent one otherwise, so the grid does not shift by a
+                // pixel as the ring moves.
+                border: Border.all(
+                  // Today's ring stays green even when picked, so the one cell
+                  // that is always worth finding never reads as the same black
+                  // ring an ordinary picked day gets.
+                  color: isToday
+                      ? sproutInk(context)
+                      : picked
+                      ? ink
+                      : Colors.transparent,
+                  width: picked ? 2 : 1,
+                ),
+              ),
+              // Stacked rather than a column: the date keeps its corner whether
+              // or not a figure is under it, and the figure gets the whole width
+              // — centred on the cell, the day number took the room a lakh needs.
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: Text('$day', style: mono(8.5, color: soft)),
+                  ),
+                  if (figures && net != null)
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      // Shrunk rather than clipped: a day with a lakh in it is a
+                      // narrower string at a smaller size, not an ellipsis.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          // The minus is the direction — `compactRupees` carries
+                          // it, and money in has no sign at all. The direction
+                          // survives hiding for the same reason a percentage
+                          // does: it is not an amount.
+                          hidden
+                              ? (net! < 0 ? '-••' : '••')
+                              : compactRupees(net!),
+                          maxLines: 1,
+                          strutStyle: monoStrut(9.5),
+                          style: mono(9.5, color: ink, weight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

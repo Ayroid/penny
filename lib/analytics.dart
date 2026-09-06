@@ -113,6 +113,22 @@ Map<String, int> spendByDay(List<Txn> txns, Range r) {
   return out;
 }
 
+/// Day key -> that day's net: what came in, less what went out.
+///
+/// Transfers are neither, so they never move a day's net — the same rule the
+/// totals and the breakdowns follow. Days where nothing happened are absent;
+/// days that happened and came out even are present with a zero, because
+/// "money moved and it balanced" is not the same as "nothing moved".
+Map<String, int> netByDay(List<Txn> txns, Range r) {
+  final out = <String, int>{};
+  for (final t in txns) {
+    if (t.kind == TxKind.transfer || !inRange(t, r)) continue;
+    final delta = t.kind == TxKind.income ? t.amountMinor : -t.amountMinor;
+    out[t.day] = (out[t.day] ?? 0) + delta;
+  }
+  return out;
+}
+
 /// One bar per period, oldest first, ending at [anchor]'s own period.
 ///
 /// Used for the trend chart. Periods with nothing in them are included as

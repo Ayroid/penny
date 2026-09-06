@@ -185,9 +185,15 @@ void main() {
     await tester.pumpWidget(wrap(HomePage(store: store)));
     await tester.pumpAndSettle();
 
-    // Colour is never the only signal: the shade encodes the amount, and the
-    // semantics carry the same figure in words.
-    expect(find.bySemanticsLabel(RegExp(r'Day 17, ₹450\.00')), findsOneWidget);
+    // Colour is never the only signal: the shade encodes the amount, the ring
+    // marks today, the minus sign carries the direction — and the semantics
+    // carry all three in words, the net one signed.
+    expect(
+      find.bySemanticsLabel(
+        RegExp(r'Day 17, today, ₹450\.00, net \+₹84,550\.00'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.bySemanticsLabel(RegExp(r'Day 1, nothing spent')),
       findsOneWidget,

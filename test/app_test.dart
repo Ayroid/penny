@@ -1434,6 +1434,151 @@ void main() {
       expect(find.text('SPEND BY DAY'), findsNothing);
     });
 
+    testWidgets('writes each day\'s net into the cells, and takes it away', (
+      tester,
+    ) async {
+      phone(tester);
+      final store = await emptyStore();
+      final day = dayKey(startOfMonth(today()));
+      store.addTxn(
+        Txn(
+          kind: TxKind.income,
+          amountMinor: 500000,
+          day: day,
+          categoryId: store.categoriesOf(TxKind.income).first.id,
+          accountId: store.accounts.first.id,
+        ),
+      );
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: 120000,
+          day: day,
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+        ),
+      );
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+
+      // The shading is spend either way, so the heading does not move when the
+      // figures arrive: they land in the cells that were already there.
+      //
+      // Whether the figure *fits* is the goldens' job, not this test's: widget
+      // tests run without the bundled fonts, and the fallback's glyphs are wide
+      // enough that a line which fits on a phone reports as overflowing here.
+      expect(find.text('SPEND BY DAY'), findsOneWidget);
+      expect(find.textContaining('busiest'), findsOneWidget);
+      expect(find.text('₹3.8K'), findsNothing);
+
+      await tester.tap(find.byTooltip('Show each day\'s net'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('SPEND BY DAY'), findsOneWidget);
+      expect(find.textContaining('busiest'), findsOneWidget);
+      // The day the money came in and went out again: what it came to, in the
+      // axis's own compact rupees.
+      expect(find.text('₹3.8K'), findsOneWidget);
+      // A day nothing happened on stays blank — no figure, not a zero.
+      expect(
+        find.bySemanticsLabel(RegExp('^Day 2, nothing spent\$')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byTooltip('Hide the figures'));
+      await tester.pumpAndSettle();
+      expect(find.text('₹3.8K'), findsNothing);
+    });
+
+    testWidgets('a debit day is written with a minus, a credit day is not', (
+      tester,
+    ) async {
+      phone(tester);
+      final store = await emptyStore();
+      final first = dayKey(startOfMonth(today()));
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: 120000,
+          day: first,
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.accounts.first.id,
+        ),
+      );
+      store.addTxn(
+        Txn(
+          kind: TxKind.income,
+          amountMinor: 500000,
+          day: dayKey(shiftDays(startOfMonth(today()), 1)),
+          categoryId: store.categoriesOf(TxKind.income).first.id,
+          accountId: store.accounts.first.id,
+        ),
+      );
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show each day\'s net'));
+      await tester.pumpAndSettle();
+
+      // The sign is the whole signal: the ink is picked for contrast against
+      // the cell's own shade, so it cannot also mean a direction.
+      expect(find.text('-₹1.2K'), findsOneWidget);
+      expect(find.text('₹5K'), findsOneWidget);
+    });
+
+    testWidgets('tapping a day shows that day below, tapping it again lets '
+        'the period back', (tester) async {
+      phone(tester);
+      final store = await emptyStore();
+      final cash = store.accounts.first.id;
+      final food = store.categoriesOf(TxKind.expense).first.id;
+      // Two days with rows on them, both inside this month.
+      for (final offset in [0, 1]) {
+        store.addTxn(
+          Txn(
+            kind: TxKind.expense,
+            amountMinor: 45000 * (offset + 1),
+            day: dayKey(shiftDays(startOfMonth(today()), offset)),
+            categoryId: food,
+            accountId: cash,
+            note: 'row $offset',
+          ),
+        );
+      }
+      await tester.pumpWidget(home(store));
+      await tester.pumpAndSettle();
+      await scrollToRows(tester);
+      expect(find.byType(TxnRow), findsNWidgets(2));
+
+      final firstOfMonth = startOfMonth(today()).day;
+      await tester.tap(find.bySemanticsLabel(RegExp('^Day $firstOfMonth\\b')));
+      await tester.pumpAndSettle();
+      await scrollToRows(tester);
+      expect(find.byType(TxnRow), findsOneWidget);
+      expect(find.textContaining('row 0'), findsOneWidget);
+
+      // The same cell again is the way back — the ring is the only thing
+      // saying a day is being held, so it has to be what releases it.
+      await tester.tap(find.bySemanticsLabel(RegExp('^Day $firstOfMonth\\b')));
+      await tester.pumpAndSettle();
+      await scrollToRows(tester);
+      expect(find.byType(TxnRow), findsNWidgets(2));
+    });
+
+    testWidgets('moving the month lets the held day go', (tester) async {
+      phone(tester);
+      await aWeek(tester);
+
+      await tester.tap(find.bySemanticsLabel(RegExp('^Day 1\\b')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Previous month'));
+      await tester.pumpAndSettle();
+      await scrollToRows(tester);
+
+      // A day picked in this month has nothing to say about the last one, and
+      // rows from outside the period on screen are worse than losing it.
+      expect(find.text('Nothing this month'), findsOneWidget);
+    });
+
     testWidgets('the month still lays out as a calendar', (tester) async {
       phone(tester);
       await aWeek(tester);

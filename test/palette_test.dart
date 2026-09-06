@@ -174,6 +174,40 @@ void main() {
         );
       });
 
+      test('$where: a figure reads at every step of the ramp', () {
+        // The calendar writes a day's net inside the shaded cell, so the ink
+        // is picked per cell — see `_Cell`. Walked across the ramp because the
+        // ends are the easy part: the crossover in the middle is where a
+        // single hardcoded ink fails, and it is also where the brand's navy
+        // fails, which is why this one cell is drawn in black and white.
+        //
+        // This is also the reason the figure is not green-for-up and
+        // red-for-down: neither tone survives its own ground here, and the
+        // direction is carried by the minus sign instead.
+        var navyFails = false;
+        for (var i = 0; i <= 20; i++) {
+          final cell = Color.lerp(unlit, lit, i / 20)!;
+          final ink =
+              contrastBetween(Colors.black, cell) >=
+                  contrastBetween(Colors.white, cell)
+              ? Colors.black
+              : Colors.white;
+          expect(
+            contrastBetween(ink, cell),
+            greaterThanOrEqualTo(4.5),
+            reason: '$where: a 9.5px figure fails at ${i * 5}% of the ramp',
+          );
+          if (contrastBetween(onAccentOf(cell), cell) < 4.5) navyFails = true;
+        }
+        expect(
+          navyFails,
+          isTrue,
+          reason:
+              '$where: navy now survives the ramp — the cell can go back '
+              'to the brand ink',
+        );
+      });
+
       test('$where: month and weekday labels survive the well', () {
         final label = dark ? Colors.white : over(navySoft, 0.85, well);
         expect(
