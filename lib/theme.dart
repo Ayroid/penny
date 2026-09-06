@@ -93,14 +93,19 @@ Color sproutDeepOf(BuildContext c) => isDark(c) ? sproutDeepDark : sproutDeep;
 /// whole reason the deep tone exists (9.1:1 in light, 5.3:1 in dark).
 const onSproutDeep = Colors.white;
 
-/// Ink on the soft green wash — a goal's percentage pill, and the line under a
-/// finished goal's bar.
+/// The green that can carry a figure as *text*: the deep tone on cream, the
+/// lit sprout at night.
 ///
-/// The deep tone on cream, at 8.2:1. At night it inverts to the lit sprout:
-/// the deep tone against the dark wash is 2.6:1 and would fail an 11px label,
-/// while the accent clears 6.8. The same swap [onTint] makes, for the one
-/// wash that is the brand's own rather than a category's.
-Color onSproutSoft(BuildContext c) => isDark(c) ? sproutDark : sproutDeep;
+/// The accent itself cannot do this job in light. It is 2.2:1 on the sunk fill
+/// and 2.6:1 on its own soft wash, either of which would fail a small bold
+/// label; the deep tone clears 7.9 and 8.2. At night the pair inverts — the
+/// deep tone disappears into a dark ground and the accent clears 7.3. The same
+/// swap [onTint] makes for a category's wash, for the brand's own green.
+///
+/// A goal's percentage pill and the line under a finished goal's bar. Not the
+/// calendar: a figure there sits on the heatmap's own green, and the day's
+/// direction is carried by a minus sign rather than by hue.
+Color sproutInk(BuildContext c) => isDark(c) ? sproutDark : sproutDeep;
 
 /// The coin. Expense fills and every chart bar — the design system reserves
 /// the accent so it never has to fill a chart.

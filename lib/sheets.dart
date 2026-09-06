@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'icons.dart';
 import 'money.dart';
+import 'store.dart';
 import 'theme.dart';
 
 // The bottom-sheet furniture shared by settings and goals: a frame, a list
@@ -343,6 +344,28 @@ class EditSheet extends StatelessWidget {
     );
   }
 }
+
+/// The day on a pill: "Today", "Yesterday", or the date itself.
+///
+/// Shared by the entry sheet and the goal contribution sheet, which write the
+/// same kind of row and must not disagree about what to call a day.
+String dayLabel(DateTime d) {
+  final t = today();
+  if (d == t) return 'Today';
+  if (d == shiftDays(t, -1)) return 'Yesterday';
+  return shortDate(d);
+}
+
+/// The platform's own date picker, capped at today: every sheet in this app
+/// records money that has already moved.
+Future<DateTime?> pickDay(BuildContext context, DateTime initial) =>
+    showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: today(),
+      helpText: 'When did the money move?',
+    );
 
 class PickChip extends StatelessWidget {
   const PickChip({

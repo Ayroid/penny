@@ -1114,7 +1114,7 @@ class PennyStore extends ChangeNotifier {
   /// all and this returns null. More than the goal still needs is only an
   /// overshoot, so ₹500 offered to a goal that needs ₹300 moves ₹300 and the
   /// rest stays where it was.
-  Txn? putAside(Goal g, int minor, String fromAccountId) {
+  Txn? putAside(Goal g, int minor, String fromAccountId, {DateTime? on}) {
     final needed = statusOf(g).remaining;
     // Guarded here rather than only on the button: this is where every caller
     // routes through, and a paused goal that quietly accepts money from a
@@ -1129,7 +1129,11 @@ class PennyStore extends ChangeNotifier {
     final t = Txn(
       kind: TxKind.transfer,
       amountMinor: capped,
-      day: dayKey(today()),
+      // [on] is when the money moved, for someone catching up a month of
+      // saving in one sitting. The ceiling above is still measured against
+      // what the account holds *now*, which is the only balance this app
+      // computes — backdating a row does not backdate the money.
+      day: dayKey(on ?? today()),
       categoryId: _transferCategoryId(),
       accountId: fromAccountId,
       toAccountId: goalsAccount().id,
@@ -1142,13 +1146,13 @@ class PennyStore extends ChangeNotifier {
 
   /// Take [minor] back out of [g], into [toAccountId]. Capped at what the goal
   /// actually holds: a goal cannot hand back money it never had.
-  Txn? takeOut(Goal g, int minor, String toAccountId) {
+  Txn? takeOut(Goal g, int minor, String toAccountId, {DateTime? on}) {
     final capped = minor.clamp(0, statusOf(g).saved);
     if (capped <= 0) return null;
     final t = Txn(
       kind: TxKind.transfer,
       amountMinor: capped,
-      day: dayKey(today()),
+      day: dayKey(on ?? today()),
       categoryId: _transferCategoryId(),
       accountId: goalsAccount().id,
       toAccountId: toAccountId,
@@ -1198,6 +1202,28 @@ class PennyStore extends ChangeNotifier {
   int get totalSetAside {
     final vault = goalsAccountOrNull;
     return vault == null ? 0 : balanceOf(vault.id);
+  }
+
+  /// What the goals claim beyond what the goals account actually holds.
+  ///
+  /// The two are summed from the same rows and normally agree. They can come
+  /// apart in one direction: money leaves the goals account without the goal
+  /// that was counting it knowing — an expense entered against it directly,
+  /// which nothing in the app offers any more, or an imported backup edited by
+  /// hand, which is read as it is given because dropping a row loses money.
+  /// [statusOf] floors each goal at zero, so the page keeps drawing; this is
+  /// the figure that says the drawing is wrong.
+  ///
+  /// The other direction is not a fault and is not reported: deleting a goal
+  /// leaves its money in the account on purpose, so a balance larger than the
+  /// goals claim is the designed state, not a discrepancy.
+  int get goalsShortfall {
+    var claimed = 0;
+    for (final g in goals) {
+      claimed += statusOf(g).saved;
+    }
+    final held = totalSetAside;
+    return claimed > held ? claimed - held : 0;
   }
 
   /// The milestone worth celebrating for [g] right now, or null.

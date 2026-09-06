@@ -57,6 +57,9 @@ class _GoalsPageState extends State<GoalsPage> {
 
     final rows = <Widget>[
       _Hero(store: store, goals: all),
+      // Directly under the figure it contradicts, and only when it has
+      // something to say.
+      if (store.goalsShortfall > 0) _Shortfall(store: store),
       // The filter replaces a label that only ever said the obvious. Kept
       // even when it would change nothing, so it does not appear and
       // disappear as goals are finished.
@@ -172,6 +175,64 @@ class _AddGoal extends StatelessWidget {
           ),
           icon: const Icon(LucideIcons.plus, size: 18),
           label: const Text('Add a new goal'),
+        ),
+      ),
+    );
+  }
+}
+
+/// The goals add up to more than the account they are held in.
+///
+/// Says what is wrong and where to look, and nothing else: it is not a scold,
+/// and there is no button on it because the app cannot know which of the two
+/// figures is the one that is right.
+class _Shortfall extends StatelessWidget {
+  const _Shortfall({required this.store});
+
+  final PennyStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final short = store.show(rupeesWhole(store.goalsShortfall));
+
+    return Semantics(
+      label:
+          'These goals add up to $short more than the Goals account holds. '
+          'Something left the account without a goal knowing.',
+      excludeSemantics: true,
+      // The coin at wash strength, which is the one tone the palette lets
+      // carry ink. Never the error colour: red is for confirming something
+      // destructive, and this is the app telling you what it found.
+      child: TintCard(
+        color: coinSoftOf(context),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              LucideIcons.triangleAlert,
+              size: 18,
+              color: scheme.onSurface,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'These goals add up to $short more than Goals holds',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Something left that account without a goal knowing — '
+                    'find it in the ledger, or move the money back in.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -608,7 +669,7 @@ class _GoalCard extends StatelessWidget {
                       ? scheme.secondary
                       : status.reached
                       ? onSproutDeep
-                      : onSproutSoft(context),
+                      : sproutInk(context),
                 ),
                 const SizedBox(width: 6),
                 Icon(LucideIcons.chevronRight, size: 16, color: scheme.outline),
@@ -637,7 +698,7 @@ class _GoalCard extends StatelessWidget {
                 // written on, and the accent at night, where the deep tone
                 // disappears into the wash.
                 color: status.reached && !goal.paused
-                    ? onSproutSoft(context)
+                    ? sproutInk(context)
                     : scheme.secondary,
               ),
             ),
@@ -661,8 +722,9 @@ Future<void> _showGoal(
   PennyStore store,
   Goal goal,
 ) async {
-  final asked =
-      await showModalBottomSheet<({_Ask ask, int amount, String accountId})>(
+  final asked = await showModalBottomSheet<
+    ({_Ask ask, int amount, String accountId, DateTime day})
+  >(
         context: context,
         isScrollControlled: true,
         builder: (context) => _ContributeSheet(store: store, goal: goal),
@@ -673,7 +735,7 @@ Future<void> _showGoal(
     case _Ask.edit:
       return _editGoal(context, store, goal);
     case _Ask.bought:
-      return _confirmBought(context, store, goal);
+      return _confirmBought(context, store, goal, asked.day);
     case _Ask.take:
       // Taking money back out never celebrates, and never un-celebrates: the
       // milestones already seen stay claimed.
@@ -683,11 +745,15 @@ Future<void> _showGoal(
         goal,
         asked.amount,
         asked.accountId,
+        asked.day,
       );
     case _Ask.put:
       // Null when there was no room left after all — nothing moved, so
       // nothing is celebrated.
-      if (store.putAside(goal, asked.amount, asked.accountId) == null) return;
+      if (store.putAside(goal, asked.amount, asked.accountId, on: asked.day) ==
+          null) {
+        return;
+      }
       // The bar grows on the way back to the page; this is the same moment,
       // felt rather than seen.
       HapticFeedback.mediumImpact();
@@ -729,6 +795,11 @@ class _ContributeSheet extends StatefulWidget {
 
 class _ContributeSheetState extends State<_ContributeSheet> {
   int _amount = 0;
+
+  /// When the money moved. Today almost always — but a month of saving
+  /// recorded in one sitting is four rows all stamped with the day it was
+  /// remembered, and the ledger is the record of *when*.
+  DateTime _day = today();
 
   /// Where the money comes from, or goes back to. Never the goals account
   /// itself: a transfer that starts and ends in the same place is not a
@@ -808,6 +879,25 @@ class _ContributeSheetState extends State<_ContributeSheet> {
           ],
         ),
         const SizedBox(height: 14),
+        Text('WHEN', style: Theme.of(context).textTheme.labelSmall),
+        const SizedBox(height: 8),
+        // The same pill the accounts above it are drawn as, unselected: it is
+        // a value you can change, not one of a set to choose between. Today
+        // unless it is said otherwise, which is what it says.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PickChip(
+            label: dayLabel(_day),
+            icon: LucideIcons.calendar,
+            colour: scheme.secondary,
+            selected: false,
+            onTap: () async {
+              final picked = await pickDay(context, _day);
+              if (picked != null) setState(() => _day = picked);
+            },
+          ),
+        ),
+        const SizedBox(height: 14),
         // Withdraw sits left, Add right: the sheet's default action lands
         // under the thumb, and the two share one row instead of stacking.
         Row(
@@ -823,6 +913,7 @@ class _ContributeSheetState extends State<_ContributeSheet> {
                           ask: _Ask.take,
                           amount: _amount,
                           accountId: _accountId,
+                          day: _day,
                         )),
                   child: const Text('Withdraw'),
                 ),
@@ -840,6 +931,7 @@ class _ContributeSheetState extends State<_ContributeSheet> {
                         ask: _Ask.put,
                         amount: _amount,
                         accountId: _accountId,
+                        day: _day,
                       )),
                 child: const Text('Add'),
               ),
@@ -861,6 +953,7 @@ class _ContributeSheetState extends State<_ContributeSheet> {
               ask: _Ask.bought,
               amount: 0,
               accountId: _accountId,
+              day: _day,
             )),
             child: const Text('Bought it'),
           ),
@@ -874,6 +967,7 @@ class _ContributeSheetState extends State<_ContributeSheet> {
             ask: _Ask.edit,
             amount: 0,
             accountId: _accountId,
+            day: _day,
           )),
           child: const Text('Edit goal'),
         ),
@@ -930,6 +1024,7 @@ Future<void> _confirmTakeOut(
   Goal goal,
   int minor,
   String accountId,
+  DateTime day,
 ) async {
   final into = store.accountById(accountId)?.name ?? 'the account';
   final go = await showDialog<bool>(
@@ -953,13 +1048,14 @@ Future<void> _confirmTakeOut(
       ],
     ),
   );
-  if (go == true) store.takeOut(goal, minor, accountId);
+  if (go == true) store.takeOut(goal, minor, accountId, on: day);
 }
 
 Future<void> _confirmBought(
   BuildContext context,
   PennyStore store,
   Goal goal,
+  DateTime day,
 ) async {
   final saved = store.statusOf(goal).saved;
   final go = await showDialog<bool>(
@@ -997,6 +1093,9 @@ Future<void> _confirmBought(
     initialAmountMinor: saved,
     initialNote: goal.name,
     initialAccountId: vault,
+    // The day the sheet was set to: buying the thing is the money moving,
+    // and that is the question the pill on it asked.
+    initialDay: day,
   );
   if (store.txns.length > before) store.removeGoal(goal);
 }

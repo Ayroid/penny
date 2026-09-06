@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'icons.dart';
 import 'money.dart';
 import 'page_bar.dart';
+import 'sheets.dart';
 import 'store.dart';
 import 'theme.dart';
 
@@ -23,6 +24,7 @@ Future<void> showEntrySheet(
   int initialAmountMinor = 0,
   String initialNote = '',
   String? initialAccountId,
+  DateTime? initialDay,
 }) async {
   // The sheet pops with what it deleted, if it deleted anything: the undo bar
   // has to be raised from a context that outlives the sheet, and this one —
@@ -37,6 +39,7 @@ Future<void> showEntrySheet(
       initialAmountMinor: initialAmountMinor,
       initialNote: initialNote,
       initialAccountId: initialAccountId,
+      initialDay: initialDay,
     ),
   );
   if (deleted == null || !context.mounted) return;
@@ -59,6 +62,7 @@ class _EntrySheet extends StatefulWidget {
     required this.initialAmountMinor,
     required this.initialNote,
     required this.initialAccountId,
+    required this.initialDay,
   });
 
   final PennyStore store;
@@ -67,6 +71,7 @@ class _EntrySheet extends StatefulWidget {
   final int initialAmountMinor;
   final String initialNote;
   final String? initialAccountId;
+  final DateTime? initialDay;
 
   @override
   State<_EntrySheet> createState() => _EntrySheetState();
@@ -82,7 +87,7 @@ class _EntrySheetState extends State<_EntrySheet> {
   );
   late DateTime _day = widget.existing != null
       ? parseDay(widget.existing!.day)
-      : today();
+      : widget.initialDay ?? today();
   late String? _categoryId = widget.existing?.categoryId;
   late String _accountId =
       widget.existing?.accountId ??
@@ -221,13 +226,7 @@ class _EntrySheetState extends State<_EntrySheet> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _day,
-      firstDate: DateTime(2000),
-      lastDate: today(),
-      helpText: 'When did the money move?',
-    );
+    final picked = await pickDay(context, _day);
     if (picked != null) setState(() => _day = picked);
   }
 
@@ -428,7 +427,7 @@ class _EntrySheetState extends State<_EntrySheet> {
                         ),
                       _Pick(
                         icon: LucideIcons.calendar,
-                        label: _dayLabel(_day),
+                        label: dayLabel(_day),
                         onTap: _pickDate,
                       ),
                     ],
@@ -478,13 +477,6 @@ class _EntrySheetState extends State<_EntrySheet> {
   /// cannot drift out of step.
   TextStyle _amountStyle(Color color) =>
       mono(40, color: color, weight: FontWeight.w700, spacing: -0.5);
-
-  String _dayLabel(DateTime d) {
-    final t = today();
-    if (d == t) return 'Today';
-    if (d == shiftDays(t, -1)) return 'Yesterday';
-    return shortDate(d);
-  }
 
   Future<void> _pickCategory() async {
     final picked = await showModalBottomSheet<String>(

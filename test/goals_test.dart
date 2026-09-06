@@ -150,6 +150,33 @@ void main() {
       );
     });
 
+    test('it can be dated back, for a month caught up in one sitting', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      final when = shiftDays(today(), -12);
+
+      final row = store.putAside(g, 30000, store.accounts.first.id, on: when)!;
+      expect(row.day, dayKey(when));
+      expect(
+        store.statusOf(g).saved,
+        30000,
+        reason: 'the goal counts by tag, not by date',
+      );
+    });
+
+    test('and so can taking it back out', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 30000, store.accounts.first.id);
+      final when = shiftDays(today(), -3);
+
+      final row = store.takeOut(g, 10000, store.accounts.first.id, on: when)!;
+      expect(row.day, dayKey(when));
+      expect(store.statusOf(g).saved, 20000);
+    });
+
     test('a target of zero is a broken file, not a finished goal', () async {
       final store = await emptyStore();
       final g = Goal(name: 'Nothing', targetMinor: 0);
@@ -282,6 +309,55 @@ void main() {
     test('a state this build does not know is just a goal', () {
       final g = Goal.fromJson({'name': 'Odd', 'target': 100, 'state': 'zzz'});
       expect(g.state, GoalState.active);
+    });
+  });
+
+  group('when the goals and the account disagree', () {
+    /// A goal funded to [saved], then [gone] taken straight out of the goals
+    /// account by something that is not a goal — what a hand-edited backup can
+    /// still carry in, and what nothing in the app offers any more.
+    Future<(PennyStore, Goal)> drained(int saved, int gone) async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, saved, store.accounts.first.id);
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: gone,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.goalsAccount().id,
+        ),
+      );
+      return (store, g);
+    }
+
+    test('the shortfall is what the goals claim and cannot have', () async {
+      final (store, g) = await drained(40000, 30000);
+      expect(store.statusOf(g).saved, 40000, reason: 'the goal still claims it');
+      expect(store.totalSetAside, 10000, reason: 'the account does not hold it');
+      expect(store.goalsShortfall, 30000);
+    });
+
+    test('a ledger that adds up reports nothing', () async {
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 40000, store.accounts.first.id);
+      expect(store.goalsShortfall, 0);
+    });
+
+    test('money left behind by a deleted goal is not a shortfall', () async {
+      // The designed state: deleting a goal leaves its money in the account.
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 40000, store.accounts.first.id);
+      store.removeGoal(g);
+
+      expect(store.totalSetAside, 40000);
+      expect(store.goalsShortfall, 0, reason: 'more held than claimed is fine');
     });
   });
 
@@ -460,6 +536,40 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Keep going'));
       await tester.pumpAndSettle();
       expect(find.text('50%'), findsNWidgets(2));
+    });
+
+    testWidgets('a contribution can be dated from the sheet', (tester) async {
+      phoneView(tester);
+      final store = await emptyStore();
+      store.addGoal(phone());
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Phone'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Today'),
+        findsOneWidget,
+        reason: 'the pill says what it will write before it writes it',
+      );
+
+      await tester.tap(find.text('Today'));
+      await tester.pumpAndSettle();
+      // The platform picker opens on today; step back a day and take it.
+      await tester.tap(find.byTooltip('Previous month'));
+      await tester.pumpAndSettle();
+      final earlier = shiftMonths(today(), -1);
+      await tester.tap(find.text('${earlier.day}').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, '300');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pumpAndSettle();
+
+      expect(store.txns.single.day, dayKey(earlier));
     });
 
     testWidgets('the sheet refuses money the account does not have', (
@@ -692,6 +802,36 @@ void main() {
 
       expect(store.goals, hasLength(1));
       expect(store.statusOf(g).saved, 100000);
+    });
+
+    testWidgets('a shortfall is said out loud, above the goals', (
+      tester,
+    ) async {
+      phoneView(tester);
+      final store = await emptyStore();
+      final g = phone();
+      store.addGoal(g);
+      store.putAside(g, 40000, store.accounts.first.id);
+      // Money out of the goals account by something that is not a goal —
+      // what a hand-edited backup can still carry in.
+      store.addTxn(
+        Txn(
+          kind: TxKind.expense,
+          amountMinor: 30000,
+          day: dayKey(today()),
+          categoryId: store.categoriesOf(TxKind.expense).first.id,
+          accountId: store.goalsAccount().id,
+        ),
+      );
+
+      await tester.pumpWidget(page(store));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('more than Goals holds'),
+        findsOneWidget,
+        reason: 'the page cannot silently draw a figure it knows is wrong',
+      );
     });
 
     testWidgets('the goal editor has an icon but no colour', (tester) async {
