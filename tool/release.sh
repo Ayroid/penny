@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Release APKs, one per ABI, into releases/<version>/.
 # With --publish, also a GitHub release v<version> carrying them — what the
-# app's Settings → Check for updates reads.
+# app's Settings → Check for updates reads, in Ayroid/penny-releases.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -45,5 +45,12 @@ echo "Hand out the arm64-v8a one unless you know otherwise."
 echo "Signed with android/penny-release.jks — back that file up."
 
 if [ "${1:-}" = "--publish" ]; then
-  gh release create "v$version" "$out"/*.apk --title "Penny $version" --generate-notes
+  # The source is private, so the release lives in a public repo of its own
+  # and the tag stays here. Notes are the commit subjects since the last tag.
+  prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+  notes=$(git log --format='- %s' ${prev:+"$prev"..}HEAD)
+  git tag "v$version"
+  git push -q origin "v$version"
+  gh release create "v$version" "$out"/*.apk --repo Ayroid/penny-releases \
+    --title "Penny $version" --notes "$notes"
 fi

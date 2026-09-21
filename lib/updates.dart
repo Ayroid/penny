@@ -13,9 +13,10 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Where `tool/release.sh --publish` puts releases. The GitHub API answers
+/// Where `tool/release.sh --publish` puts releases: a public repo of nothing
+/// but releases, so the source can stay private. The GitHub API answers
 /// without a token only for a public repo.
-const _repo = 'Ayroid/penny';
+const _repo = 'Ayroid/penny-releases';
 
 typedef Release = ({String version, String apkUrl});
 

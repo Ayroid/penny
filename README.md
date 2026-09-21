@@ -26,5 +26,5 @@ went. Everything stays on your phone.
 ## Install
 
 Download the latest APK from
-[Releases](https://github.com/Ayroid/penny/releases/latest). After that, use
+[Releases](https://github.com/Ayroid/penny-releases/releases/latest). After that, use
 Settings → Check for updates to get new versions.
