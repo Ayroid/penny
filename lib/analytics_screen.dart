@@ -116,7 +116,6 @@ class _InsightsPageState extends State<InsightsPage> {
     final text = Theme.of(context).textTheme;
     final data = byCategory(store.txns, range, kind);
     final all = _expanded[kind] ?? false;
-    final pie = store.pie.contains(kind);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,17 +128,6 @@ class _InsightsPageState extends State<InsightsPage> {
               child: Text(title, style: text.labelSmall),
             ),
             const Spacer(),
-            if (data.isNotEmpty)
-              IconButton(
-                tooltip: pie ? 'Show as list' : 'Show as pie chart',
-                iconSize: 16,
-                color: Theme.of(context).colorScheme.secondary,
-                onPressed: () {
-                  store.setPie(kind, !pie);
-                  setState(() {});
-                },
-                icon: Icon(pie ? LucideIcons.list : LucideIcons.chartPie),
-              ),
             if (data.length > 5)
               TextButton(
                 onPressed: () => setState(() => _expanded[kind] = !all),
@@ -159,7 +147,6 @@ class _InsightsPageState extends State<InsightsPage> {
             spend: data,
             shown: (all ? data.entries : data.entries.take(5)).toList(),
             total: data.values.fold(0, (a, b) => a + b),
-            pie: pie,
             onTap: (id) => showPeriodTxns(
               context,
               store,
@@ -848,16 +835,11 @@ class _Breakdown extends StatelessWidget {
     required this.spend,
     required this.shown,
     required this.total,
-    required this.pie,
     required this.onTap,
   });
 
   final PennyStore store;
   final Map<String, int> spend;
-
-  /// A donut over the rows, which then drop their share bars: the ring says
-  /// the same thing, and the icon tiles are its key.
-  final bool pie;
 
   /// The rows to draw — the top few, or all of them once asked.
   final List<MapEntry<String, int>> shown;
@@ -872,34 +854,34 @@ class _Breakdown extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         children: [
-          if (pie)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
-              child: SizedBox.square(
-                dimension: 160,
-                child: CustomPaint(
-                  painter: _Donut([
-                    for (final e in spend.entries)
-                      (
-                        e.value / (total == 0 ? 1 : total),
-                        catColorAt(
-                          store.categoryById(e.key)?.color ?? defaultCatColor,
-                        ),
+          // The ring is the share; the rows under it are its key, so they
+          // carry no bars of their own.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+            child: SizedBox.square(
+              dimension: 160,
+              child: CustomPaint(
+                painter: _Donut([
+                  for (final e in spend.entries)
+                    (
+                      e.value / (total == 0 ? 1 : total),
+                      catColorAt(
+                        store.categoryById(e.key)?.color ?? defaultCatColor,
                       ),
-                  ]),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(30),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          store.show(rupeesWhole(total)),
-                          strutStyle: monoStrut(18),
-                          style: mono(
-                            18,
-                            color: scheme.onSurface,
-                            weight: FontWeight.w800,
-                          ),
+                    ),
+                ]),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(30),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        store.show(rupeesWhole(total)),
+                        strutStyle: monoStrut(18),
+                        style: mono(
+                          18,
+                          color: scheme.onSurface,
+                          weight: FontWeight.w800,
                         ),
                       ),
                     ),
@@ -907,20 +889,16 @@ class _Breakdown extends StatelessWidget {
                 ),
               ),
             ),
+          ),
           for (final e in shown)
             Builder(
               builder: (context) {
                 final c = store.categoryById(e.key);
                 final name = c?.name ?? 'Uncategorised';
                 final colour = catColorAt(c?.color ?? defaultCatColor);
-                // The bar and the figure are one fraction, computed once: of
-                // everything in this list, not of the largest row in it. The
-                // bar used to scale off the peak, so the biggest category
-                // filled the track while its own label said 69%.
-                final permille = total == 0
-                    ? 0
-                    : (e.value * 1000 / total).round();
-                final share = (permille / 10).round();
+                // Of everything in this list — the same fraction the ring's
+                // slice is drawn from.
+                final share = total == 0 ? 0 : (e.value * 100 / total).round();
 
                 return Semantics(
                   button: true,
@@ -971,33 +949,6 @@ class _Breakdown extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                if (!pie) ...[
-                                  const SizedBox(height: 6),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(pill),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          // A sliver at minimum: a row that is
-                                          // in the list did happen.
-                                          flex: permille.clamp(1, 1000),
-                                          child: Container(
-                                            height: 6,
-                                            color: colour,
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: (1000 - permille).clamp(0, 999),
-                                          child: Container(
-                                            height: 6,
-                                            color:
-                                                scheme.surfaceContainerHighest,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
                               ],
                             ),
                           ),

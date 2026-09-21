@@ -13,7 +13,6 @@ const _themeKey = 'themeMode';
 const _onboardedKey = 'onboarded';
 const _momentsKey = 'moments';
 const _hideAmountsKey = 'hideAmounts';
-const _pieKey = 'pieBreakdowns';
 
 /// Calendar-day key, e.g. "2026-09-04". A transaction happens on a *day*, not
 /// at an instant, so days are stored as strings — no DateTime equality or
@@ -533,10 +532,6 @@ class PennyStore extends ChangeNotifier {
   /// outlasts one launch, and having to hide it again every time is why people
   /// stop bothering.
   bool hideAmounts = false;
-
-  /// Which of Insights' breakdowns are drawn as a pie. Persisted: it is a
-  /// way of reading, not a thing done once.
-  final Set<TxKind> pie = {};
   bool onboarded = false;
   bool loaded = false;
 
@@ -552,12 +547,6 @@ class PennyStore extends ChangeNotifier {
         .values[(prefs.getInt(_themeKey) ?? ThemeMode.light.index).clamp(0, 2)];
     onboarded = prefs.getBool(_onboardedKey) ?? false;
     hideAmounts = prefs.getBool(_hideAmountsKey) ?? false;
-    pie
-      ..clear()
-      ..addAll([
-        for (final name in prefs.getStringList(_pieKey) ?? const <String>[])
-          ?TxKind.values.asNameMap()[name],
-      ]);
 
     final rawMoments = prefs.getString(_momentsKey);
     if (rawMoments != null) {
@@ -827,13 +816,6 @@ class PennyStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_hideAmountsKey, value);
-  }
-
-  Future<void> setPie(TxKind kind, bool on) async {
-    on ? pie.add(kind) : pie.remove(kind);
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_pieKey, [for (final k in pie) k.name]);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {

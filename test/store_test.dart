@@ -629,12 +629,4 @@ void main() {
       expect(s.accounts.single.icon, 'gem');
     });
   });
-
-  test('the pie choice survives a restart, per breakdown', () async {
-    await (await loaded()).setPie(TxKind.expense, true);
-    final again = await loaded();
-    expect(again.pie, {TxKind.expense});
-    await again.setPie(TxKind.expense, false);
-    expect((await loaded()).pie, isEmpty);
-  });
 }

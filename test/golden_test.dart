@@ -151,7 +151,6 @@ Future<void> shot(
   String name,
   Widget child, {
   bool dark = false,
-  Future<void> Function(WidgetTester)? act,
 }) async {
   tester.view
     ..physicalSize = const Size(1080, 2280)
@@ -167,10 +166,6 @@ Future<void> shot(
   );
   await tester.pumpAndSettle();
   await settleImages(tester);
-  if (act != null) {
-    await act(tester);
-    await tester.pumpAndSettle();
-  }
 
   await expectLater(
     find.byType(MaterialApp),
@@ -325,19 +320,6 @@ void main() {
       'insights_dark',
       InsightsPage(store: await seeded()),
       dark: true,
-    );
-  });
-
-  testWidgets('insights pie', (tester) async {
-    await shot(
-      tester,
-      'insights_pie',
-      InsightsPage(store: await seeded()),
-      act: (tester) async {
-        await tester.tap(find.byTooltip('Show as pie chart').first);
-        await tester.pumpAndSettle();
-        await tester.drag(find.byType(ListView), const Offset(0, -560));
-      },
     );
   });
 
