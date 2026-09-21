@@ -45,9 +45,6 @@ class _InsightsPageState extends State<InsightsPage> {
   /// twenty categories in it buries everything under it in small bars.
   final _expanded = <TxKind, bool>{};
 
-  /// Which breakdowns are drawn as a pie rather than as rows of bars.
-  final _pie = <TxKind, bool>{};
-
   /// A span picked by hand from the label. While it is set it is the window
   /// every figure on the page reads, and no period pill is lit.
   Range? _custom;
@@ -119,7 +116,7 @@ class _InsightsPageState extends State<InsightsPage> {
     final text = Theme.of(context).textTheme;
     final data = byCategory(store.txns, range, kind);
     final all = _expanded[kind] ?? false;
-    final pie = _pie[kind] ?? false;
+    final pie = store.pie.contains(kind);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,7 +134,10 @@ class _InsightsPageState extends State<InsightsPage> {
                 tooltip: pie ? 'Show as list' : 'Show as pie chart',
                 iconSize: 16,
                 color: Theme.of(context).colorScheme.secondary,
-                onPressed: () => setState(() => _pie[kind] = !pie),
+                onPressed: () {
+                  store.setPie(kind, !pie);
+                  setState(() {});
+                },
                 icon: Icon(pie ? LucideIcons.list : LucideIcons.chartPie),
               ),
             if (data.length > 5)
