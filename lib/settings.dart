@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'icons.dart';
+import 'lock.dart';
 import 'money.dart';
 import 'onboarding.dart';
 import 'recurring.dart';
@@ -70,6 +71,17 @@ class _Body extends StatelessWidget {
             },
             value: store.themeMode,
             onChanged: store.setThemeMode,
+          ),
+        ),
+        section('Privacy'),
+        SoftCard(
+          padding: EdgeInsets.zero,
+          child: _Row(
+            icon: LucideIcons.fingerprintPattern,
+            label: 'App lock',
+            subtitle: store.appLock ? 'On · fingerprint or screen lock' : 'Off',
+            onTap: () => _toggleLock(context, store),
+            last: true,
           ),
         ),
         section('Money'),
@@ -373,6 +385,31 @@ class _Row extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Either way round, the phone is asked first. On, so a phone that cannot
+/// answer never locks you out; off, so whoever picked up an unlocked phone
+/// cannot quietly take the lock away.
+Future<void> _toggleLock(BuildContext context, PennyStore store) async {
+  void say(String message) => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+
+  final on = !store.appLock;
+  if (on && !await phoneCanLock()) {
+    if (context.mounted) say('Set up a screen lock on your phone first.');
+    return;
+  }
+  if (!await unlock()) return;
+  await store.setAppLock(on);
+  if (!context.mounted) return;
+  say(on ? 'Penny will ask when you open it.' : 'App lock is off.');
 }
 
 // ── Backup ──────────────────────────────────────────────────────────────────

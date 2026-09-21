@@ -13,6 +13,7 @@ const _themeKey = 'themeMode';
 const _onboardedKey = 'onboarded';
 const _momentsKey = 'moments';
 const _hideAmountsKey = 'hideAmounts';
+const _appLockKey = 'appLock';
 
 /// Calendar-day key, e.g. "2026-09-04". A transaction happens on a *day*, not
 /// at an instant, so days are stored as strings — no DateTime equality or
@@ -532,6 +533,10 @@ class PennyStore extends ChangeNotifier {
   /// outlasts one launch, and having to hide it again every time is why people
   /// stop bothering.
   bool hideAmounts = false;
+
+  /// Whether Penny asks for the phone's fingerprint or screen lock on the way
+  /// in. See `lock.dart`.
+  bool appLock = false;
   bool onboarded = false;
   bool loaded = false;
 
@@ -547,6 +552,7 @@ class PennyStore extends ChangeNotifier {
         .values[(prefs.getInt(_themeKey) ?? ThemeMode.light.index).clamp(0, 2)];
     onboarded = prefs.getBool(_onboardedKey) ?? false;
     hideAmounts = prefs.getBool(_hideAmountsKey) ?? false;
+    appLock = prefs.getBool(_appLockKey) ?? false;
 
     final rawMoments = prefs.getString(_momentsKey);
     if (rawMoments != null) {
@@ -816,6 +822,13 @@ class PennyStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_hideAmountsKey, value);
+  }
+
+  Future<void> setAppLock(bool value) async {
+    appLock = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_appLockKey, value);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {

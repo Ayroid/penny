@@ -21,6 +21,9 @@ dependencies:
   package_info_plus: ^10.2.1
   path_provider: ^2.1.6
   open_filex: ^4.7.0
+  # App lock: the phone's own fingerprint or screen lock. Penny sees only the
+  # yes or no.
+  local_auth: ^3.0.2
 
 dev_dependencies:
   flutter_test:

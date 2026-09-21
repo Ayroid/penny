@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'goals_screen.dart';
 import 'home.dart';
 import 'ledger_screen.dart';
+import 'lock.dart';
 import 'onboarding.dart';
 import 'page_bar.dart';
 import 'penny.dart';
@@ -37,12 +38,15 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   /// i.e. after loading already finished. It would capture the post-load
   /// values, compare them equal to themselves, and never rebuild, leaving the
   /// app on its launch frame forever. Pinned by a test.
-  late (ThemeMode, bool, bool) _shell;
+  late (ThemeMode, bool, bool, bool) _shell;
+
+  /// When the app last went to the background, while the lock is on.
+  DateTime? _leftAt;
 
   @override
   void initState() {
     super.initState();
-    _shell = (store.themeMode, store.loaded, store.onboarded);
+    _shell = (store.themeMode, store.loaded, store.onboarded, store.appLock);
     WidgetsBinding.instance.addObserver(this);
     store.addListener(_onStoreChanged);
     store.load().then((_) {
@@ -50,6 +54,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       // no background isolate and no server, so "when it next opens" is the
       // honest contract.
       materialiseDue(store);
+      // Asked straight away rather than waiting for a tap: opening the app
+      // is already the request to get in.
+      if (store.appLock) unlock();
     });
   }
 
@@ -62,6 +69,18 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && store.appLock && !asking) {
+      _leftAt ??= DateTime.now();
+    }
+    if (state == AppLifecycleState.resumed) {
+      final left = _leftAt;
+      _leftAt = null;
+      if (left != null && relockAfter(DateTime.now().difference(left))) {
+        unlocked.value = false;
+        unlock();
+      }
+    }
+
     // Coming back after midnight, or after a few days away, should not need a
     // relaunch to show the rent that fell due.
     if (state == AppLifecycleState.resumed && store.loaded) {
@@ -70,7 +89,13 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
 
   void _onStoreChanged() {
-    final next = (store.themeMode, store.loaded, store.onboarded);
+    final next = (
+      store.themeMode,
+      store.loaded,
+      store.onboarded,
+      store.appLock,
+    );
+    if (next.$4 != _shell.$4) hideInRecents(next.$4);
     if (next != _shell) setState(() => _shell = next);
   }
 
@@ -89,6 +114,22 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       theme: appTheme(dark: false),
       darkTheme: appTheme(dark: true),
       themeMode: store.themeMode,
+      // Above the navigator, so a sheet or dialog left open is covered too.
+      // Offstage keeps every page alive underneath — unlocking lands exactly
+      // where you left — but paints nothing, takes no taps, and says nothing
+      // to a screen reader.
+      builder: (context, child) => ValueListenableBuilder(
+        valueListenable: unlocked,
+        builder: (context, open, _) {
+          final locked = store.loaded && store.appLock && !open;
+          return Stack(
+            children: [
+              Offstage(offstage: locked, child: child),
+              if (locked) const LockScreen(),
+            ],
+          );
+        },
+      ),
       home: !store.loaded
           ? const LaunchFrame()
           : store.onboarded
