@@ -52,3 +52,6 @@ test/failures/
 /android/key.properties
 *.jks
 *.keystore
+
+# Local tooling state.
+.serena/

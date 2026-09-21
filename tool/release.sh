@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # Release APKs, one per ABI, into releases/<version>/.
+# With --publish, also a GitHub release v<version> carrying them — what the
+# app's Settings → Check for updates reads.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 version=$(grep '^version:' pubspec.yaml | sed 's/version: *//' | cut -d+ -f1)
 out="releases/$version"
+# Android installs an update only over a lower versionCode, and a forgotten
+# `+N` bump fails on the phone, not here. So the code comes from the version
+# itself: 0.2.3 -> 203, 1.4.0 -> 10400.
+IFS=. read -r major minor patch <<<"$version"
+build_number=$((major * 10000 + minor * 100 + patch))
 
 # A release nobody can install is not a release: without key.properties the
 # Gradle config falls back to the debug key, and an APK signed with it cannot
@@ -21,7 +28,7 @@ if [ -d "$out" ]; then
   exit 1
 fi
 
-flutter build apk --split-per-abi --release \
+flutter build apk --split-per-abi --release --build-number="$build_number" \
   --obfuscate --split-debug-info="symbols/$version"
 
 mkdir -p "$out"
@@ -36,3 +43,7 @@ ls -la "$out"
 echo
 echo "Hand out the arm64-v8a one unless you know otherwise."
 echo "Signed with android/penny-release.jks — back that file up."
+
+if [ "${1:-}" = "--publish" ]; then
+  gh release create "v$version" "$out"/*.apk --title "Penny $version" --generate-notes
+fi

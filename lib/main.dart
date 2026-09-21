@@ -9,8 +9,12 @@ import 'penny.dart';
 import 'recurring.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'updates.dart';
 
-void main() => runApp(const App());
+void main() {
+  runApp(const App());
+  checkOnLaunch();
+}
 
 class App extends StatefulWidget {
   const App({super.key});

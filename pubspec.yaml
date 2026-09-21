@@ -16,6 +16,11 @@ dependencies:
   file_picker: ^12.1.2
   # The icon set. ~250 named icons out of the package's 28k.
   lucide_icons_flutter: ^3.1.17
+  # Settings → Check for updates: this build's version, a place to download
+  # the newer APK, and the hand-off to the phone's installer. Rove's setup.
+  package_info_plus: ^10.2.1
+  path_provider: ^2.1.6
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:

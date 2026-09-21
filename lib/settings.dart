@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'icons.dart';
@@ -13,6 +15,7 @@ import 'recurring.dart';
 import 'sheets.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'updates.dart';
 
 void openSettings(BuildContext context, PennyStore store) => Navigator.of(
   context,
@@ -156,14 +159,20 @@ class _Body extends StatelessWidget {
         section('About'),
         SoftCard(
           padding: EdgeInsets.zero,
-          child: _Row(
-            icon: LucideIcons.sparkles,
-            label: 'Onboarding',
-            subtitle: 'Review the onboarding flow',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => OnboardingScreen(store: store)),
-            ),
-            last: true,
+          child: Column(
+            children: [
+              _Row(
+                icon: LucideIcons.sparkles,
+                label: 'Onboarding',
+                subtitle: 'Review the onboarding flow',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => OnboardingScreen(store: store),
+                  ),
+                ),
+              ),
+              _UpdateRow(),
+            ],
           ),
         ),
         const SizedBox(height: 24),
@@ -179,9 +188,137 @@ class _Body extends StatelessWidget {
   }
 }
 
+/// Check for updates, or the download once one is under way.
+class _UpdateRow extends StatelessWidget {
+  const _UpdateRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, info) => ValueListenableBuilder(
+        valueListenable: _download,
+        builder: (context, progress, _) => progress == null
+            ? ValueListenableBuilder(
+                valueListenable: updateWaiting,
+                builder: (context, waiting, _) => _Row(
+                  icon: LucideIcons.refreshCw,
+                  leading: waiting == null
+                      ? null
+                      : Badge(
+                          smallSize: 10,
+                          child: Icon(
+                            LucideIcons.refreshCw,
+                            size: 19,
+                            color: Theme.of(context).colorScheme.secondary,
+                          ),
+                        ),
+                  label: 'Check for updates',
+                  subtitle: info.hasData
+                      ? [
+                          'Version ${info.data!.version}',
+                          if (waiting != null) '$waiting is out',
+                        ].join(' · ')
+                      : null,
+                  onTap: () => _checkForUpdate(context),
+                  last: true,
+                ),
+              )
+            : _Row(
+                // The icon's own place, so the row does not jump.
+                leading: SizedBox.square(
+                  dimension: 19,
+                  child: CircularProgressIndicator(
+                    value: progress.fraction,
+                    strokeWidth: 2.5,
+                  ),
+                ),
+                icon: LucideIcons.download,
+                label: 'Downloading update',
+                subtitle: progress.fraction == null
+                    ? 'Starting…'
+                    : '${(progress.fraction! * 100).round()}%',
+                // Already on its way; a second tap starts nothing.
+                onTap: () {},
+                last: true,
+              ),
+      ),
+    );
+  }
+}
+
+/// An update on its way, or null. Outside the screen, so leaving Settings
+/// and coming back finds the download still showing.
+final _download = ValueNotifier<({double? fraction})?>(null);
+
+/// Ask GitHub, offer the newer build, fetch it, and hand it to the phone's
+/// installer — which asks once for "install unknown apps", then to update.
+Future<void> _checkForUpdate(BuildContext context) async {
+  void say(String message) => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+
+  say('Checking…');
+  final Release? latest;
+  final String current;
+  try {
+    latest = await latestRelease();
+    current = (await PackageInfo.fromPlatform()).version;
+  } catch (_) {
+    if (context.mounted) say('Could not reach GitHub. Try again later.');
+    return;
+  }
+  if (!context.mounted) return;
+  if (latest == null || !isNewer(latest.version, current)) {
+    say('You have the latest version.');
+    return;
+  }
+  updateWaiting.value = latest.version;
+
+  final go = await showDialog<bool>(
+    context: context,
+    barrierColor: navy.withValues(alpha: 0.32),
+    builder: (context) => AlertDialog(
+      title: Text('Penny ${latest!.version} is out'),
+      content: Text('You have $current. Your money stays as it is.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Later'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Update'),
+        ),
+      ],
+    ),
+  );
+  if (go != true || !context.mounted) return;
+
+  _download.value = (fraction: null);
+  try {
+    final path = await downloadApk(
+      latest,
+      onProgress: (f) => _download.value = (fraction: f),
+    );
+    _download.value = null;
+    await OpenFilex.open(path, type: 'application/vnd.android.package-archive');
+  } catch (_) {
+    _download.value = null;
+    if (context.mounted) say('The download failed. Try again later.');
+  }
+}
+
 class _Row extends StatelessWidget {
   const _Row({
     required this.icon,
+    this.leading,
     required this.label,
     required this.onTap,
     this.subtitle,
@@ -189,6 +326,9 @@ class _Row extends StatelessWidget {
   });
 
   final IconData icon;
+
+  /// In [icon]'s place, when it has to be more than a glyph.
+  final Widget? leading;
   final String label;
   final String? subtitle;
   final VoidCallback onTap;
@@ -205,7 +345,7 @@ class _Row extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(icon, size: 19, color: scheme.secondary),
+                leading ?? Icon(icon, size: 19, color: scheme.secondary),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
