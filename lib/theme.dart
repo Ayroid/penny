@@ -196,6 +196,14 @@ ThemeData appTheme({required bool dark}) {
       centerTitle: true,
       titleTextStyle: t(17, FontWeight.w700),
     ),
+    // Insights' range picker. Material fills the days between the two ends
+    // from secondaryContainer, which this scheme leaves to fall back on the
+    // muted navy — a slab of dark blue with navy numbers on it. The soft
+    // sprout is the ends' own green, lightened, so the range reads as one
+    // thing and the dates stay legible on it.
+    datePickerTheme: DatePickerThemeData(
+      rangeSelectionBackgroundColor: dark ? sproutSoftDark : sproutSoft,
+    ),
     cardTheme: CardThemeData(
       elevation: 0,
       margin: EdgeInsets.zero,
