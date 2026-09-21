@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:penny/store.dart';
@@ -43,5 +45,14 @@ void main() {
     await tester.pump();
     expect(dot().isLabelVisible, isTrue);
     expect(find.byTooltip('Settings, update ready'), findsOneWidget);
+  });
+
+  // Debug builds get INTERNET from Flutter's own debug manifest, so a release
+  // without it fails only on the phone, as "Could not reach GitHub".
+  test('the release manifest may use the network', () {
+    expect(
+      File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
+      contains('android.permission.INTERNET'),
+    );
   });
 }
