@@ -55,6 +55,28 @@ DateTime shiftAnchor(Period period, DateTime anchor, int by) =>
 Range shiftRange(Period period, DateTime anchor, int by) =>
     rangeFor(period, shiftAnchor(period, anchor, by));
 
+/// Whole days in [r], both ends counted. Measured in UTC so a daylight-saving
+/// change inside the span cannot lose it an hour, and with it a day.
+int daysIn(Range r) {
+  final a = parseDay(r.from), b = parseDay(r.to);
+  return DateTime.utc(
+        b.year,
+        b.month,
+        b.day,
+      ).difference(DateTime.utc(a.year, a.month, a.day)).inDays +
+      1;
+}
+
+/// [r] moved [by] whole copies of itself — what the arrows over a hand-picked
+/// range do. Ten days back from the 11th–20th is the 1st–10th.
+Range shiftSpan(Range r, int by) {
+  final n = daysIn(r) * by;
+  return (
+    from: dayKey(shiftDays(parseDay(r.from), n)),
+    to: dayKey(shiftDays(parseDay(r.to), n)),
+  );
+}
+
 bool inRange(Txn t, Range r) =>
     t.day.compareTo(r.from) >= 0 && t.day.compareTo(r.to) <= 0;
 
@@ -136,19 +158,34 @@ Map<String, int> netByDay(List<Txn> txns, Range r) {
 /// two non-adjacent months look adjacent.
 typedef Bucket = ({Range range, String label, int income, int expense});
 
-List<Bucket> series(List<Txn> txns, Period period, DateTime anchor, int count) {
-  final out = <Bucket>[];
-  for (var i = count - 1; i >= 0; i--) {
-    final r = shiftRange(period, anchor, -i);
-    final t = totalsIn(txns, r);
-    out.add((
-      range: r,
-      label: _labelFor(period, parseDay(r.from)),
-      income: t.income,
-      expense: t.expense,
-    ));
-  }
-  return out;
+List<Bucket> series(
+  List<Txn> txns,
+  Period period,
+  DateTime anchor,
+  int count,
+) => [
+  for (var i = count - 1; i >= 0; i--)
+    _bucket(
+      txns,
+      shiftRange(period, anchor, -i),
+      (from) => _labelFor(period, from),
+    ),
+];
+
+/// The same, for a hand-picked range: [count] equal spans ending with [r].
+List<Bucket> spanSeries(List<Txn> txns, Range r, int count) => [
+  for (var i = count - 1; i >= 0; i--)
+    _bucket(txns, shiftSpan(r, -i), (from) => '${from.day}/${from.month}'),
+];
+
+Bucket _bucket(List<Txn> txns, Range r, String Function(DateTime) label) {
+  final t = totalsIn(txns, r);
+  return (
+    range: r,
+    label: label(parseDay(r.from)),
+    income: t.income,
+    expense: t.expense,
+  );
 }
 
 String _labelFor(Period period, DateTime d) => switch (period) {
@@ -195,15 +232,25 @@ int? changeVsPrevious(
   Period period,
   DateTime anchor, {
   required TxKind kind,
+}) => changeBetween(
+  txns,
+  rangeFor(period, anchor),
+  shiftRange(period, anchor, -1),
+  kind: kind,
+);
+
+/// [changeVsPrevious] for any two windows — a hand-picked range against the
+/// span of the same length before it.
+int? changeBetween(
+  List<Txn> txns,
+  Range now,
+  Range previous, {
+  required TxKind kind,
 }) {
-  final previous = shiftRange(period, anchor, -1);
   // Nothing recorded on or before the previous period means there is no
   // comparison to make — better silent than claiming a rise from zero.
   if (!txns.any((t) => t.day.compareTo(previous.to) <= 0)) return null;
 
-  final now = totalsIn(txns, rangeFor(period, anchor));
-  final then = totalsIn(txns, previous);
-  final a = kind == TxKind.income ? now.income : now.expense;
-  final b = kind == TxKind.income ? then.income : then.expense;
-  return a - b;
+  final a = totalsIn(txns, now), b = totalsIn(txns, previous);
+  return kind == TxKind.income ? a.income - b.income : a.expense - b.expense;
 }

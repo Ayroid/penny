@@ -10,6 +10,7 @@ import 'money.dart';
 import 'settings.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'updates.dart';
 
 /// The shell's top bar: a title, an optional line under it, and up to two
 /// round icon buttons.
@@ -81,6 +82,8 @@ class PeriodNav extends StatelessWidget {
     required this.period,
     required this.anchor,
     required this.onStep,
+    this.custom,
+    this.onPick,
   });
 
   final Period period;
@@ -88,6 +91,13 @@ class PeriodNav extends StatelessWidget {
 
   /// -1 for the period before, +1 for the one after.
   final ValueChanged<int> onStep;
+
+  /// A span picked by hand. Read instead of [period] while it is set.
+  final Range? custom;
+
+  /// Makes the label the way into a date-range picker. Left null where there
+  /// is no custom range to pick, so the label stays plain text there.
+  final VoidCallback? onPick;
 
   /// The next period is only reachable while it is not entirely in the future.
   static bool canGoForward(Period period, DateTime anchor) =>
@@ -98,15 +108,28 @@ class PeriodNav extends StatelessWidget {
     final from = parseDay(r.from);
     return switch (period) {
       Period.day => r.from == dayKey(today()) ? 'Today' : longDate(from),
-      Period.week => '${shortDate(from)} — ${shortDate(parseDay(r.to))}',
+      Period.week => spanLabel(r),
       Period.month => '${months[from.month - 1]} ${from.year}',
     };
   }
 
+  static String spanLabel(Range r) =>
+      '${shortDate(parseDay(r.from))} — ${shortDate(parseDay(r.to))}';
+
   @override
   Widget build(BuildContext context) {
-    final forward = canGoForward(period, anchor);
-    final unit = period.label.toLowerCase();
+    final c = custom;
+    final forward = c == null
+        ? canGoForward(period, anchor)
+        : c.to.compareTo(dayKey(today())) < 0;
+    final unit = c == null ? period.label.toLowerCase() : 'range';
+    final label = c == null ? labelFor(period, anchor) : spanLabel(c);
+    final colour = Theme.of(context).colorScheme.secondary;
+    final text = Text(
+      label,
+      textAlign: TextAlign.center,
+      style: mono(12.5, color: colour, weight: FontWeight.w700),
+    );
 
     return Row(
       children: [
@@ -117,15 +140,35 @@ class PeriodNav extends StatelessWidget {
           onPressed: () => onStep(-1),
         ),
         Expanded(
-          child: Text(
-            labelFor(period, anchor),
-            textAlign: TextAlign.center,
-            style: mono(
-              12.5,
-              color: Theme.of(context).colorScheme.secondary,
-              weight: FontWeight.w700,
-            ),
-          ),
+          child: onPick == null
+              ? text
+              : Semantics(
+                  button: true,
+                  label: '$label. Pick dates',
+                  excludeSemantics: true,
+                  onTap: onPick,
+                  child: InkWell(
+                    onTap: onPick,
+                    borderRadius: BorderRadius.circular(pill),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(child: text),
+                          const SizedBox(width: 6),
+                          // The only hint the label is a button: small, and
+                          // in the label's own colour.
+                          Icon(
+                            LucideIcons.calendarRange,
+                            size: 14,
+                            color: colour,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
         ),
         Opacity(
           // Kept in the layout rather than removed, so the label does not
@@ -189,10 +232,18 @@ class ShellBar extends StatelessWidget {
           tooltip: 'Insights',
           onPressed: () => openInsights(context, store),
         ),
-        RoundIconButton(
-          icon: LucideIcons.settings,
-          tooltip: 'Settings',
-          onPressed: () => openSettings(context, store),
+        // A red dot while a newer version is out (see `checkOnLaunch`).
+        ValueListenableBuilder(
+          valueListenable: updateWaiting,
+          builder: (context, waiting, _) => Badge(
+            isLabelVisible: waiting != null,
+            smallSize: 10,
+            child: RoundIconButton(
+              icon: LucideIcons.settings,
+              tooltip: waiting == null ? 'Settings' : 'Settings, update ready',
+              onPressed: () => openSettings(context, store),
+            ),
+          ),
         ),
       ],
     );

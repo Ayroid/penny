@@ -375,6 +375,55 @@ void main() {
     expect(find.text('${months[last.month - 1]} ${last.year}'), findsOneWidget);
   });
 
+  testWidgets('insights reads a hand-picked range, and lets it go', (
+    tester,
+  ) async {
+    phone(tester);
+    final store = await emptyStore();
+    final from = shiftDays(today(), -5);
+    store.addTxn(
+      Txn(
+        kind: TxKind.expense,
+        amountMinor: 45000,
+        day: dayKey(shiftDays(today(), -3)),
+        categoryId: store.categoriesOf(TxKind.expense).first.id,
+        accountId: store.accounts.first.id,
+      ),
+    );
+
+    await tester.pumpWidget(wrap(InsightsPage(store: store)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel(RegExp(r'Pick dates$')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Switch to input'));
+    await tester.pumpAndSettle();
+    String typed(DateTime d) =>
+        '${'${d.month}'.padLeft(2, '0')}/${'${d.day}'.padLeft(2, '0')}/${d.year}';
+    await tester.enterText(find.byType(TextField).at(0), typed(from));
+    await tester.enterText(find.byType(TextField).at(1), typed(today()));
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    final picked = (from: dayKey(from), to: dayKey(today()));
+    expect(find.text(PeriodNav.spanLabel(picked)), findsOneWidget);
+    expect(find.text('SPENT IN THIS RANGE'), findsOneWidget);
+    expect(find.text('₹450.00'), findsOneWidget);
+
+    // Six days back is the six days before, and holds nothing.
+    await tester.tap(find.byTooltip('Previous range'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(PeriodNav.spanLabel(shiftSpan(picked, -1))),
+      findsOneWidget,
+    );
+    expect(find.text('Nothing spent yet'), findsOneWidget);
+
+    await tester.tap(find.text('Month'));
+    await tester.pumpAndSettle();
+    expect(find.text('SPENT THIS MONTH'), findsOneWidget);
+  });
+
   testWidgets('the day view counts days, not hours', (tester) async {
     phone(tester);
     final store = await emptyStore();

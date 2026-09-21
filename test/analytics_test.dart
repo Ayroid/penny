@@ -237,4 +237,35 @@ void main() {
       );
     });
   });
+
+  group('custom ranges', () {
+    const r = (from: '2026-03-25', to: '2026-04-03'); // ten days, over DST
+
+    test('count both ends, across a clock change', () {
+      expect(daysIn(r), 10);
+      expect(daysIn((from: '2026-09-04', to: '2026-09-04')), 1);
+    });
+
+    test('step by their own length', () {
+      expect(shiftSpan(r, -1), (from: '2026-03-15', to: '2026-03-24'));
+      expect(shiftSpan(r, 1), (from: '2026-04-04', to: '2026-04-13'));
+    });
+
+    test('chart as equal spans ending with the range', () {
+      final s = spanSeries([tx(TxKind.expense, 500, '2026-03-20')], r, 2);
+      expect(s.map((b) => b.range).toList(), [shiftSpan(r, -1), r]);
+      expect(s.map((b) => b.expense).toList(), [500, 0]);
+    });
+
+    test('compare against the span before', () {
+      final txns = [
+        tx(TxKind.expense, 500, '2026-03-20'),
+        tx(TxKind.expense, 800, '2026-03-30'),
+      ];
+      expect(
+        changeBetween(txns, r, shiftSpan(r, -1), kind: TxKind.expense),
+        300,
+      );
+    });
+  });
 }

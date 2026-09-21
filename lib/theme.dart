@@ -691,14 +691,17 @@ class Segmented<T> extends StatelessWidget {
 
   /// Choice -> label, in the order they should read.
   final Map<T, String> options;
-  final T value;
+
+  /// A value that is not among [options] lights nothing — for when the thing
+  /// chosen came from elsewhere. Null is a real option where T allows it.
+  final T? value;
   final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final keys = options.keys.toList();
-    final index = keys.indexOf(value);
+    final index = keys.indexWhere((k) => k == value);
     final accent = sproutDeepOf(context);
     const ink = onSproutDeep;
 
