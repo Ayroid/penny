@@ -49,6 +49,14 @@ downloads.
   withdrawn. Every income and expense total excludes them; a transfer nets to
   zero across the ledger.
 
+- **A realignment is a kind, not an expense.** After weeks of unlogged cash, the
+  gap between the app and the wallet is not a purchase. `adjustUp` and
+  `adjustDown` move the account balance and nothing else: every income, spend,
+  breakdown and trend excludes them, as it does transfers. Two kinds rather
+  than one signed amount, because an amount is never negative. Settings →
+  Accounts → Realign balance asks what is actually there and writes the
+  difference; a row can only be deleted, since there is nothing else to edit.
+
 - **Days are `'YYYY-MM-DD'` strings, and day arithmetic goes through the
   `DateTime` constructor.** A `Duration` is 24 real hours and lands on the wrong
   calendar day across a DST change — which would drop or double a heatmap cell
@@ -495,6 +503,9 @@ downloads.
 - [x] Today ringed in the grid; tapping a day puts its rows below the calendar
 - [x] Recent rows grouped under day headers
 - [x] Empty state leads with the action, not with three zero cards
+
+- [x] Realign an account to what it actually holds, from its edit sheet
+- [x] Realignments move the balance, never the spend or income totals
 
 ### Goals
 - [x] A page of what you are saving for, target and progress each

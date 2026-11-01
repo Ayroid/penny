@@ -36,8 +36,8 @@ class _LedgerPageState extends State<LedgerPage> {
   /// What one row does to the total across all accounts. A transfer nets to
   /// zero — it moves money without changing how much there is.
   int _effect(Txn t) => switch (t.kind) {
-    TxKind.income => t.amountMinor,
-    TxKind.expense => -t.amountMinor,
+    TxKind.income || TxKind.adjustUp => t.amountMinor,
+    TxKind.expense || TxKind.adjustDown => -t.amountMinor,
     TxKind.transfer => 0,
   };
 

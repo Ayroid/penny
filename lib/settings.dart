@@ -526,6 +526,54 @@ Future<void> _showAccounts(BuildContext context, PennyStore store) {
   );
 }
 
+/// Asks what [a] actually holds and adds the row that makes the balance say so.
+Future<void> _realign(BuildContext context, PennyStore store, Account a) async {
+  final current = store.balanceOf(a.id);
+  var actual = current;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialog) => AlertDialog(
+        title: Text('Realign ${a.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Penny has ${rupees(current)}. How much is actually there?'),
+            const SizedBox(height: 12),
+            AmountField(
+              value: actual,
+              positiveOnly: true,
+              onChanged: (v) => setDialog(() => actual = v),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              actual == current
+                  ? 'Already right.'
+                  : 'Adds ${rupees(actual - current, signed: true)}',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: actual == current
+                ? null
+                : () => Navigator.pop(context, true),
+            child: const Text('Realign'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  store.realign(a.id, actual);
+  Navigator.pop(context); // the edit sheet
+}
+
 Future<void> _editAccount(
   BuildContext context,
   PennyStore store,
@@ -565,41 +613,61 @@ Future<void> _editAccount(
         // it is full rather than failing quietly on the tap.
         footer: existing == null
             ? null
-            : Row(
+            : Column(
                 children: [
-                  Expanded(
+                  SizedBox(
+                    width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: store.canPin(existing)
-                          ? () {
-                              store.setAccountPinned(
-                                existing,
-                                !existing.pinned,
-                              );
-                              Navigator.pop(context);
-                            }
-                          : null,
-                      icon: Icon(
-                        existing.pinned ? LucideIcons.pinOff : LucideIcons.pin,
-                        size: 18,
-                      ),
-                      label: Text(
-                        existing.pinned
-                            ? 'Unpin'
-                            : store.canPin(existing)
-                            ? 'Pin to home'
-                            : '${PennyStore.maxPinned} pinned already',
-                      ),
+                      onPressed: () => _realign(context, store, existing),
+                      icon: const Icon(LucideIcons.scale, size: 18),
+                      label: const Text('Realign balance'),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        store.setAccountArchived(existing, !existing.archived);
-                        Navigator.pop(context);
-                      },
-                      child: Text(existing.archived ? 'Bring back' : 'Archive'),
-                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: store.canPin(existing)
+                              ? () {
+                                  store.setAccountPinned(
+                                    existing,
+                                    !existing.pinned,
+                                  );
+                                  Navigator.pop(context);
+                                }
+                              : null,
+                          icon: Icon(
+                            existing.pinned
+                                ? LucideIcons.pinOff
+                                : LucideIcons.pin,
+                            size: 18,
+                          ),
+                          label: Text(
+                            existing.pinned
+                                ? 'Unpin'
+                                : store.canPin(existing)
+                                ? 'Pin to home'
+                                : '${PennyStore.maxPinned} pinned already',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            store.setAccountArchived(
+                              existing,
+                              !existing.archived,
+                            );
+                            Navigator.pop(context);
+                          },
+                          child: Text(
+                            existing.archived ? 'Bring back' : 'Archive',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

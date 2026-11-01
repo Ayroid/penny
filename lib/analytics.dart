@@ -103,7 +103,7 @@ Totals totalsIn(List<Txn> txns, Range r) {
         income += t.amountMinor;
       case TxKind.expense:
         expense += t.amountMinor;
-      case TxKind.transfer:
+      case TxKind.transfer || TxKind.adjustUp || TxKind.adjustDown:
         break; // Not spending, not earning.
     }
   }
@@ -114,7 +114,10 @@ Totals totalsIn(List<Txn> txns, Range r) {
 /// than present with a zero, so a breakdown never lists things that did not
 /// happen.
 Map<String, int> byCategory(List<Txn> txns, Range r, TxKind kind) {
-  assert(kind != TxKind.transfer, 'transfers have no meaningful breakdown');
+  assert(
+    kind == TxKind.income || kind == TxKind.expense,
+    'only income and expense have a breakdown',
+  );
   final out = <String, int>{};
   for (final t in txns) {
     if (t.kind != kind || !inRange(t, r)) continue;
@@ -144,7 +147,10 @@ Map<String, int> spendByDay(List<Txn> txns, Range r) {
 Map<String, int> netByDay(List<Txn> txns, Range r) {
   final out = <String, int>{};
   for (final t in txns) {
-    if (t.kind == TxKind.transfer || !inRange(t, r)) continue;
+    if (!(t.kind == TxKind.income || t.kind == TxKind.expense) ||
+        !inRange(t, r)) {
+      continue;
+    }
     final delta = t.kind == TxKind.income ? t.amountMinor : -t.amountMinor;
     out[t.day] = (out[t.day] ?? 0) + delta;
   }

@@ -130,7 +130,9 @@ class TxnRow extends StatelessWidget {
     final account = store.accountById(txn.accountId);
 
     final isTransfer = txn.kind == TxKind.transfer;
-    final colour = isTransfer
+    final isAdjust =
+        txn.kind == TxKind.adjustUp || txn.kind == TxKind.adjustDown;
+    final colour = isTransfer || isAdjust
         ? scheme.secondary
         : catColorAt(category?.color ?? defaultCatColor);
 
@@ -138,6 +140,8 @@ class TxnRow extends StatelessWidget {
     // from, plus the person's own note if there is one.
     final title = isTransfer
         ? '${account?.name ?? '—'} → ${store.accountById(txn.toAccountId ?? '')?.name ?? '—'}'
+        : isAdjust
+        ? 'Realigned'
         : category?.name ?? 'Uncategorised';
     final subtitle = [
       if (!isTransfer) account?.name ?? '',
@@ -149,8 +153,10 @@ class TxnRow extends StatelessWidget {
     final amount = hideAmount
         ? maskedAmount
         : switch (txn.kind) {
-            TxKind.income => rupees(txn.amountMinor, signed: true),
-            TxKind.expense => '-${rupees(txn.amountMinor)}',
+            TxKind.income ||
+            TxKind.adjustUp => rupees(txn.amountMinor, signed: true),
+            TxKind.expense ||
+            TxKind.adjustDown => '-${rupees(txn.amountMinor)}',
             TxKind.transfer => rupees(txn.amountMinor),
           };
 
@@ -178,7 +184,7 @@ class TxnRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  isTransfer
+                  isTransfer || isAdjust
                       ? iconFor('arrow-left-right')
                       : iconFor(category?.icon ?? defaultIcon),
                   size: 18,
@@ -230,7 +236,9 @@ class TxnRow extends StatelessWidget {
                           // Income is the brand's own green because it is the thing
                           // the app is for. Spending is the plain foreground, not
                           // red: an ordinary expense is not a failure.
-                          color: txn.kind == TxKind.income
+                          color:
+                              txn.kind == TxKind.income ||
+                                  txn.kind == TxKind.adjustUp
                               ? sproutOf(context)
                               : scheme.onSurface,
                           weight: FontWeight.w700,

@@ -84,10 +84,17 @@ String newId() {
 /// stays honest. Withdrawing cash from the bank is not an expense; without
 /// this the month's spend is overstated and the bank balance is wrong. Every
 /// income/expense total in the app excludes transfers.
+///
+/// [adjustUp] and [adjustDown] are a realignment: the balance was wrong, and
+/// this row makes it right. They move the account and nothing else — no
+/// income or spending total counts them. Two kinds rather than one signed
+/// amount, because an amount is never negative.
 enum TxKind {
   income,
   expense,
-  transfer;
+  transfer,
+  adjustUp,
+  adjustDown;
 
   static TxKind parse(String? s) => TxKind.values.firstWhere(
     (k) => k.name == s,
@@ -967,9 +974,9 @@ class PennyStore extends ChangeNotifier {
     var v = accountById(accountId)?.openingBalanceMinor ?? 0;
     for (final t in txns) {
       switch (t.kind) {
-        case TxKind.income:
+        case TxKind.income || TxKind.adjustUp:
           if (t.accountId == accountId) v += t.amountMinor;
-        case TxKind.expense:
+        case TxKind.expense || TxKind.adjustDown:
           if (t.accountId == accountId) v -= t.amountMinor;
         case TxKind.transfer:
           // Both sides, so a transfer nets to zero across the whole ledger.
@@ -996,6 +1003,23 @@ class PennyStore extends ChangeNotifier {
     txns.add(t);
     _sort();
     _commit();
+  }
+
+  /// Makes [accountId] hold [actualMinor] by adding the row that closes the
+  /// gap. Nothing is added when it already does.
+  void realign(String accountId, int actualMinor, {String note = ''}) {
+    final gap = actualMinor - balanceOf(accountId);
+    if (gap == 0) return;
+    addTxn(
+      Txn(
+        kind: gap > 0 ? TxKind.adjustUp : TxKind.adjustDown,
+        amountMinor: gap.abs().clamp(0, maxMinor),
+        day: dayKey(today()),
+        categoryId: _transferCategoryId(),
+        accountId: accountId,
+        note: note,
+      ),
+    );
   }
 
   /// Removes [t] and returns where it was, so an undo can put it back.
@@ -1328,8 +1352,8 @@ class PennyStore extends ChangeNotifier {
           cell(t.day),
           cell(t.kind.name),
           switch (t.kind) {
-            TxKind.income => amount(t.amountMinor),
-            TxKind.expense => '-${amount(t.amountMinor)}',
+            TxKind.income || TxKind.adjustUp => amount(t.amountMinor),
+            TxKind.expense || TxKind.adjustDown => '-${amount(t.amountMinor)}',
             TxKind.transfer => '0.00',
           },
           t.kind == TxKind.transfer ? amount(t.amountMinor) : '',

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:penny/analytics.dart';
 import 'package:penny/store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -113,6 +114,37 @@ void main() {
       expect(s.balanceOf(bank), 8000000 - 45000);
       expect(s.totalBalance, 7955000);
     });
+
+    test(
+      'realigning closes the gap without touching spend or income',
+      () async {
+        final s = await seeded();
+        final cash = acc(s, 'Cash');
+        s.addTxn(
+          Txn(
+            kind: TxKind.income,
+            amountMinor: 100000,
+            day: dayKey(today()),
+            categoryId: cat(s, 'Salary'),
+            accountId: cash,
+          ),
+        );
+
+        s.realign(cash, 66000);
+        expect(s.balanceOf(cash), 66000);
+        s.realign(cash, 90000);
+        expect(s.balanceOf(cash), 90000);
+        final before = s.txns.length;
+        s.realign(cash, 90000);
+        expect(s.txns.length, before, reason: 'no gap, no row');
+
+        final t = totalsIn(s.txns, (
+          from: dayKey(today()),
+          to: dayKey(today()),
+        ));
+        expect((t.income, t.expense), (100000, 0));
+      },
+    );
 
     test('an opening balance is the starting point', () async {
       final s = await seeded();

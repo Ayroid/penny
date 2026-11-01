@@ -26,6 +26,36 @@ Future<void> showEntrySheet(
   String? initialAccountId,
   DateTime? initialDay,
 }) async {
+  // A realignment has no kind, category or account to edit — only to undo.
+  if (existing != null &&
+      (existing.kind == TxKind.adjustUp ||
+          existing.kind == TxKind.adjustDown)) {
+    final undo = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this realignment?'),
+        content: const Text('The balance goes back to what it was before.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (undo != true || !context.mounted) return;
+    final at = store.removeTxn(existing);
+    showUndoBar(
+      context,
+      'Deleted ${rupees(existing.amountMinor)}',
+      onUndo: () => store.insertTxnAt(at, existing),
+    );
+    return;
+  }
   // The sheet pops with what it deleted, if it deleted anything: the undo bar
   // has to be raised from a context that outlives the sheet, and this one —
   // the page that opened it — does.
